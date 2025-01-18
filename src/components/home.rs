@@ -1,17 +1,22 @@
+use std::str::Bytes;
+
+use ansi_to_tui::IntoText;
 use color_eyre::Result;
 use ratatui::{prelude::*, widgets::*};
 use symbols::scrollbar;
+use text::ToLine;
 use tokio::sync::mpsc::UnboundedSender;
 
-use super::Component;
+use super::{gdbtty, Component};
 use crate::{action::Action, config::Config};
+use tracing::error;
 
 #[derive(Default)]
 pub struct Home {
     command_tx: Option<UnboundedSender<Action>>,
     config: Config,
 
-    text: String,
+    text: Vec<Vec<u8>>,
     vertical_scroll_state: ScrollbarState,
     vertical_scroll: usize,
 }
@@ -23,6 +28,9 @@ impl Home {
 }
 
 impl Component for Home {
+    fn init(&mut self, area: Size) -> Result<()> {
+        Ok(())
+    }
     fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
         self.command_tx = Some(tx);
         Ok(())
@@ -47,9 +55,22 @@ impl Component for Home {
                     self.vertical_scroll_state.position(self.vertical_scroll);
             }
             Action::Down => {
-                self.vertical_scroll = self.vertical_scroll.saturating_add(1);
+                self.vertical_scroll = self
+                    .vertical_scroll
+                    .saturating_add(1)
+                    .min(self.text.len() - 1);
                 self.vertical_scroll_state =
                     self.vertical_scroll_state.position(self.vertical_scroll);
+            }
+            Action::GdbRead(gdbtty::Action::Newline(mut out)) => {
+                let mut line = self.text.pop().map_or(vec![], |s| s);
+                line.append(&mut out);
+                self.text.push(line);
+                return Ok(Some(Action::Render));
+            }
+            Action::GdbRead(gdbtty::Action::Oldline(out)) => {
+                self.text.push(out);
+                return Ok(Some(Action::Render));
             }
             _ => {}
         }
@@ -63,14 +84,23 @@ impl Component for Home {
             Constraint::Percentage(25),
         ])
         .areas(area);
-        let text = vec!["hello world", "aaaaa", "ccccc", "ddddd"]
-            .into_iter()
-            .map(|s| Line::from(s))
-            .collect::<Vec<_>>();
-        self.vertical_scroll_state = self.vertical_scroll_state.content_length(text.len());
+        let text = self
+            .text
+            .iter()
+            .map(|vec| String::from_iter(vec.iter().map(|c| char::from(*c))))
+            .map(|mut s| {
+                s.push('\n');
+                s
+            })
+            .collect::<String>();
+        let text = text.into_text().unwrap();
+
+        let n = self.text.len();
+        self.vertical_scroll_state = self.vertical_scroll_state.content_length(n);
+        let title = format!("gdb cmd {}/{}", self.vertical_scroll + 1, n);
         let paragraph = Paragraph::new(text)
             .gray()
-            .block(Block::bordered().gray().title("gdb cmd"))
+            .block(Block::bordered().gray().title(title))
             .scroll((self.vertical_scroll as u16, 0));
         frame.render_widget(paragraph, area);
         let scrollbar =
