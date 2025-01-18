@@ -16,5 +16,5 @@ pub enum Action {
     Help,
     Up,
     Down,
-    GdbRead(gdbtty::Action)
+    GdbRead(gdbtty::Action),
 }

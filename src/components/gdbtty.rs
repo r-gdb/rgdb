@@ -1,14 +1,12 @@
 use super::Component;
-use crate::{action, config::Config, logging};
+use crate::{action, config::Config};
 use color_eyre::{eyre::eyre, eyre::Ok, Result};
-use portable_pty::{native_pty_system, Child, CommandBuilder, PtySize, PtySystem};
-use ratatui::{prelude::*, widgets::*};
+use portable_pty::{native_pty_system, Child, CommandBuilder, PtySize};
+use ratatui::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{default, sync::Arc};
 use strum::Display;
-use symbols::scrollbar;
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
-use tracing::{debug, error, info};
+use tracing::error;
 
 #[derive(Default)]
 pub struct Gdbtty {
@@ -39,7 +37,7 @@ impl Gdbtty {
         mut reader: Box<dyn std::io::Read + Send>,
         send: UnboundedSender<action::Action>,
     ) {
-        let mut buf = [0 as u8; 32];
+        let mut buf = [0_u8; 32];
         loop {
             // debug!("read start!");
             let n = reader.read(&mut buf).map_or(0, |n| n);
@@ -86,10 +84,10 @@ impl Component for Gdbtty {
         Ok(())
     }
 
-    fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
+    fn draw(&mut self, _frame: &mut Frame, _area: Rect) -> Result<()> {
         Ok(())
     }
-    fn update(&mut self, action: action::Action) -> Result<Option<action::Action>> {
+    fn update(&mut self, _action: action::Action) -> Result<Option<action::Action>> {
         if let Some(t) = &self.gdb_read_task {
             if t.is_finished() {
                 error!("gdb task finish!");
@@ -97,12 +95,12 @@ impl Component for Gdbtty {
         }
         Ok(None)
     }
-    fn init(&mut self, area: Size) -> Result<()> {
+    fn init(&mut self, _area: Size) -> Result<()> {
         // Use the native pty implementation for the system
         let pty_system = native_pty_system();
 
         // Create a new pty
-        let mut pair = pty_system
+        let pair = pty_system
             .openpty(PtySize {
                 rows: 24,
                 cols: 80,

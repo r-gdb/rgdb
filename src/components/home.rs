@@ -1,15 +1,10 @@
-use std::str::Bytes;
-
+use super::{gdbtty, Component};
+use crate::{action::Action, config::Config};
 use ansi_to_tui::IntoText;
 use color_eyre::Result;
 use ratatui::{prelude::*, widgets::*};
 use symbols::scrollbar;
-use text::ToLine;
 use tokio::sync::mpsc::UnboundedSender;
-
-use super::{gdbtty, Component};
-use crate::{action::Action, config::Config};
-use tracing::error;
 
 #[derive(Default)]
 pub struct Home {
@@ -28,7 +23,7 @@ impl Home {
 }
 
 impl Component for Home {
-    fn init(&mut self, area: Size) -> Result<()> {
+    fn init(&mut self, _area: Size) -> Result<()> {
         Ok(())
     }
     fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
