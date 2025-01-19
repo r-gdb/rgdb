@@ -12,6 +12,7 @@ build = "build.rs"
 [dependencies]
 ansi-to-tui = "7.0.0"
 better-panic = "0.3.0"
+bytes = "1.9.0"
 clap = { version = "4.5.20", features = [
     "derive",
     "cargo",
@@ -43,6 +44,7 @@ tokio-util = "0.7.12"
 tracing = "0.1.40"
 tracing-error = "0.2.0"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "serde"] }
+vt100 = "0.15.2"
 
 [build-dependencies]
 anyhow = "1.0.90"

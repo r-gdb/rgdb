@@ -5,6 +5,7 @@ use ratatui::{
     Frame,
 };
 use tokio::sync::mpsc::UnboundedSender;
+use tracing::debug;
 
 use crate::{action::Action, config::Config, tui::Event};
 
@@ -68,7 +69,10 @@ pub trait Component {
     fn handle_events(&mut self, event: Option<Event>) -> Result<Option<Action>> {
         let action = match event {
             Some(Event::Key(key_event)) => self.handle_key_event(key_event)?,
-            Some(Event::Mouse(mouse_event)) => self.handle_mouse_event(mouse_event)?,
+            Some(Event::Mouse(mouse_event)) => {
+                // debug!("event {:?}", &event);
+                self.handle_mouse_event(mouse_event)?
+            }
             _ => None,
         };
         Ok(action)

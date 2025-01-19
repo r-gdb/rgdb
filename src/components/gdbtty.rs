@@ -1,11 +1,15 @@
+use std::{io::Read, str::Bytes};
+
 use super::Component;
 use crate::{action, config::Config};
+// use bytes;
 use color_eyre::{eyre::eyre, eyre::Ok, Result};
 use portable_pty::{native_pty_system, Child, CommandBuilder, PtySize};
 use ratatui::prelude::*;
 use serde::{Deserialize, Serialize};
 use strum::Display;
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
+use tracing::debug;
 use tracing::error;
 
 #[derive(Default)]
@@ -52,7 +56,9 @@ impl Gdbtty {
                                     .filter(|c| char::from(**c) != '\r')
                                     .copied()
                                     .collect();
-
+                                let buf_char =
+                                    buf.iter().map(|c| (char::from(*c), c)).collect::<Vec<_>>();
+                                debug!("{:?}", &buf_char);
                                 if id == 0 {
                                     Action::Newline(buf)
                                 } else {
@@ -71,6 +77,57 @@ impl Gdbtty {
             });
         }
     }
+
+    fn handle_pane_key_event(key: &crossterm::event::KeyEvent) -> Option<Vec<u8>> {
+        let input_bytes = match key.code {
+            crossterm::event::KeyCode::Char(ch) => {
+                let mut send = vec![ch as u8];
+                let upper = ch.to_ascii_uppercase();
+                if key.modifiers == crossterm::event::KeyModifiers::CONTROL {
+                    match upper {
+                        // https://github.com/fyne-io/terminal/blob/master/input.go
+                        // https://gist.github.com/ConnerWill/d4b6c776b509add763e17f9f113fd25b
+                        '2' | '@' | ' ' => send = vec![0],
+                        '3' | '[' => send = vec![27],
+                        '4' | '\\' => send = vec![28],
+                        '5' | ']' => send = vec![29],
+                        '6' | '^' => send = vec![30],
+                        '7' | '-' | '_' => send = vec![31],
+                        char if ('A'..='_').contains(&char) => {
+                            // Since A == 65,
+                            // we can safely subtract 64 to get
+                            // the corresponding control character
+                            let ascii_val = char as u8;
+                            let ascii_to_send = ascii_val - 64;
+                            send = vec![ascii_to_send];
+                        }
+                        _ => {}
+                    }
+                }
+                send
+            }
+            #[cfg(unix)]
+            crossterm::event::KeyCode::Enter => vec![b'\n'],
+            #[cfg(windows)]
+            crossterm::event::KeyCode::Enter => vec![b'\r', b'\n'],
+            crossterm::event::KeyCode::Backspace => vec![8],
+            crossterm::event::KeyCode::Left => vec![27, 91, 68],
+            crossterm::event::KeyCode::Right => vec![27, 91, 67],
+            crossterm::event::KeyCode::Up => vec![27, 91, 65],
+            crossterm::event::KeyCode::Down => vec![27, 91, 66],
+            crossterm::event::KeyCode::Tab => vec![9],
+            crossterm::event::KeyCode::Home => vec![27, 91, 72],
+            crossterm::event::KeyCode::End => vec![27, 91, 70],
+            crossterm::event::KeyCode::PageUp => vec![27, 91, 53, 126],
+            crossterm::event::KeyCode::PageDown => vec![27, 91, 54, 126],
+            crossterm::event::KeyCode::BackTab => vec![27, 91, 90],
+            crossterm::event::KeyCode::Delete => vec![27, 91, 51, 126],
+            crossterm::event::KeyCode::Insert => vec![27, 91, 50, 126],
+            crossterm::event::KeyCode::Esc => vec![27],
+            _ => return None,
+        };
+        Some(input_bytes)
+    }
 }
 
 impl Component for Gdbtty {
@@ -87,6 +144,19 @@ impl Component for Gdbtty {
     fn draw(&mut self, _frame: &mut Frame, _area: Rect) -> Result<()> {
         Ok(())
     }
+    fn handle_key_event(
+        &mut self,
+        key: crossterm::event::KeyEvent,
+    ) -> Result<Option<action::Action>> {
+        if let Some(bytes) = Gdbtty::handle_pane_key_event(&key) {
+            let bytes = bytes.into_iter().map(|c| char::from(c)).collect::<String>();
+            if let Some(mut write) = self.gdb_writer.as_mut() {
+                write!(write, "{}", bytes.as_str())?;
+            }
+        };
+        Ok(None)
+    }
+
     fn update(&mut self, _action: action::Action) -> Result<Option<action::Action>> {
         if let Some(t) = &self.gdb_read_task {
             if t.is_finished() {

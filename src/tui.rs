@@ -24,7 +24,7 @@ use tokio::{
     time::interval,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::error;
+use tracing::{debug, error};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Event {
@@ -65,7 +65,7 @@ impl Tui {
             event_tx,
             frame_rate: 60.0,
             tick_rate: 4.0,
-            mouse: false,
+            mouse: true,
             paste: false,
         })
     }
@@ -128,7 +128,10 @@ impl Tui {
                 crossterm_event = event_stream.next().fuse() => match crossterm_event {
                     Some(Ok(event)) => match event {
                         CrosstermEvent::Key(key) if key.kind == KeyEventKind::Press => Event::Key(key),
-                        CrosstermEvent::Mouse(mouse) => Event::Mouse(mouse),
+                        CrosstermEvent::Mouse(mouse) => {
+                            // debug!("event {:?}", &mouse);
+                            Event::Mouse(mouse)
+                        },
                         CrosstermEvent::Resize(x, y) => Event::Resize(x, y),
                         CrosstermEvent::FocusLost => Event::FocusLost,
                         CrosstermEvent::FocusGained => Event::FocusGained,
