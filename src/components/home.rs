@@ -1,50 +1,44 @@
-use std::io::Read;
+use std::{io::Read, usize};
 
 use super::{gdbtty, Component};
 use crate::{action::Action, config::Config};
 use ansi_to_tui::IntoText;
 use color_eyre::{eyre::Ok, Result};
+use crossterm::cursor;
 use ratatui::{prelude::*, widgets::*};
+use std::collections::VecDeque;
 use symbols::scrollbar;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
+use tui_term::widget::PseudoTerminal;
 
 #[derive(Default)]
 pub struct Home {
     command_tx: Option<UnboundedSender<Action>>,
     config: Config,
 
-    text: Vec<Vec<u8>>,
+    vt100_parser: vt100::Parser,
     vertical_scroll_state: ScrollbarState,
     vertical_scroll: usize,
 }
 
 impl Home {
     pub fn new() -> Self {
-        Self::default()
+        let s = Self::default();
+        Self {
+            command_tx: s.command_tx,
+            config: s.config,
+            vt100_parser: vt100::Parser::new(24, 80, usize::MAX),
+            vertical_scroll_state: s.vertical_scroll_state,
+            vertical_scroll: s.vertical_scroll,
+        }
     }
-    fn get_area_hight(&self, area: &Rect) -> usize {
-        area.as_size().height.saturating_sub(2) as usize
-    }
-    fn get_text_hight(&self, area: &Rect) -> usize {
-        // debug!(
-        //     "text_hight {:?} {:?}",
-        //     self.text.len(),
-        //     area.as_size().height
-        // );
-        let hight = self.get_area_hight(area);
-        self.text.len().saturating_sub(hight)
-    }
-    fn get_text_draw_rage(&self, area: &Rect) -> (usize, usize) {
-        let n = self.get_text_hight(area);
-        let hight = self.get_area_hight(area);
-
-        (
-            self.vertical_scroll,
-            self.vertical_scroll
-                .saturating_add(hight)
-                .min(n.saturating_add(hight)),
-        )
+    fn get_text_hight(&mut self, area: &Rect) -> usize {
+        let now_scrollback = self.vt100_parser.screen().scrollback();
+        self.vt100_parser.set_scrollback(usize::MAX);
+        let ret = self.vt100_parser.screen().scrollback();
+        self.vt100_parser.set_scrollback(now_scrollback);
+        ret
     }
 }
 
@@ -82,25 +76,19 @@ impl Component for Home {
                 // add any logic here that should run on every render
             }
             Action::Up => {
-                self.vertical_scroll = self.vertical_scroll.saturating_sub(1);
-                self.vertical_scroll_state =
-                    self.vertical_scroll_state.position(self.vertical_scroll);
-            }
-            Action::Down => {
                 self.vertical_scroll = self.vertical_scroll.saturating_add(1);
                 self.vertical_scroll_state =
                     self.vertical_scroll_state.position(self.vertical_scroll);
             }
-            Action::GdbRead(gdbtty::Action::Newline(mut out)) => {
-                let mut line = self.text.pop().map_or(vec![], |s| s);
-                line.append(&mut out);
-                self.text.push(line);
-                self.vertical_scroll = self.text.len();
-                return Ok(None);
+            Action::Down => {
+                self.vertical_scroll = self.vertical_scroll.saturating_sub(1);
+                self.vertical_scroll_state =
+                    self.vertical_scroll_state.position(self.vertical_scroll);
             }
-            Action::GdbRead(gdbtty::Action::Oldline(out)) => {
-                self.text.push(out);
-                self.vertical_scroll = self.text.len();
+            Action::GdbRead(gdbtty::Action::Out(out)) => {
+                self.vt100_parser.process(out.as_slice());
+                self.vt100_parser.set_scrollback(0);
+                self.vertical_scroll = 0;
                 return Ok(None);
             }
             _ => {}
@@ -116,48 +104,40 @@ impl Component for Home {
             Constraint::Percentage(25),
         ])
         .areas(area);
-        // debug!(
-        //     "vertical sroll {} all len {} {:?}",
-        //     &self.vertical_scroll,
-        //     self.get_text_hight(&area),
-        //     area
-        // );
+        let in_size = area
+            .inner(Margin {
+                vertical: 1,
+                horizontal: 1,
+            })
+            .as_size();
+        self.vt100_parser.set_size(in_size.height, in_size.width);
         let n = self.get_text_hight(&area);
         self.vertical_scroll = self.vertical_scroll.min(n);
-        let line_range = self.get_text_draw_rage(&area);
-        // debug!("vertical sroll {}", self.vertical_scroll);
-        let text = self.text.as_slice()[line_range.0..line_range.1.min(self.text.len())]
-            .iter()
-            .enumerate()
-            .map(|(id, vec)| {
-                let id = line_range.0.saturating_add(id);
-                let mut parser = vt100::Parser::new(24, 80, 0);
-                let vec = vec
-                    .into_iter()
-                    .map(|c| match c {
-                        b'\t' => vec![b' ', b' ', b' ', b' '],
-                        _ => vec![*c],
-                    })
-                    .flatten()
-                    .collect::<Vec<_>>();
-                parser.process(&vec);
-                let vec_format = parser.screen().contents_formatted();
-                let s = String::from_iter(vec_format.into_iter().map(|c| char::from(c)));
-                let s = format!("{}|{}\n", id, s);
-                s
-            })
-            .collect::<String>();
-        let text = text.into_text().unwrap();
-
         self.vertical_scroll_state = self.vertical_scroll_state.content_length(n);
-        self.vertical_scroll_state = self.vertical_scroll_state.position(self.vertical_scroll);
-        let title = format!("gdb cmd {}/{}", self.vertical_scroll, n);
-        let paragraph = Paragraph::new(text)
-            .gray()
-            .block(Block::bordered().gray().title(title))
-            // .scroll((self.vertical_scroll as u16, 0))
-            ;
-        frame.render_widget(paragraph, area);
+        self.vertical_scroll_state = self
+            .vertical_scroll_state
+            .position(n - self.vertical_scroll);
+        self.vt100_parser.set_scrollback(self.vertical_scroll);
+        let screen = self.vt100_parser.screen();
+        let cursor_show = self.vertical_scroll == 0;
+        // self.vt100_parser.set_scrollback(2);
+        let title = format!(
+            "gdb cmd {}/{} area size {:?}",
+            n - self.vertical_scroll,
+            n,
+            screen.size()
+        );
+        let pseudo_term = PseudoTerminal::new(screen)
+            .block(Block::default().title(title).borders(Borders::ALL))
+            .cursor(tui_term::widget::Cursor::default().visibility(cursor_show))
+            .style(
+                Style::default()
+                    .fg(Color::White)
+                    .bg(Color::Black)
+                    .add_modifier(Modifier::BOLD),
+            );
+
+        frame.render_widget(pseudo_term, area);
         let scrollbar =
             Scrollbar::new(ScrollbarOrientation::VerticalRight).symbols(scrollbar::VERTICAL);
         frame.render_stateful_widget(scrollbar, area, &mut self.vertical_scroll_state);

@@ -31,9 +31,7 @@ impl Gdbtty {
 
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
 pub enum Action {
-    None,
-    Oldline(Vec<u8>),
-    Newline(Vec<u8>),
+    Out(Vec<u8>),
 }
 
 impl Gdbtty {
@@ -45,36 +43,20 @@ impl Gdbtty {
         loop {
             // debug!("read start!");
             let n = reader.read(&mut buf).map_or(0, |n| n);
-            let actions =
-                match n {
-                    0 => vec![Action::None],
-                    _ => {
-                        let bufs = buf[0..n].split(|c| char::from(*c) == '\n').enumerate().map(
-                            |(id, buf)| {
-                                let buf: Vec<u8> = buf
-                                    .iter()
-                                    .filter(|c| char::from(**c) != '\r')
-                                    .copied()
-                                    .collect();
-                                let buf_char =
-                                    buf.iter().map(|c| (char::from(*c), c)).collect::<Vec<_>>();
-                                debug!("{:?}", &buf_char);
-                                if id == 0 {
-                                    Action::Newline(buf)
-                                } else {
-                                    Action::Oldline(buf)
-                                }
-                            },
-                        );
-                        bufs.collect()
-                    }
-                };
-            actions.into_iter().for_each(|action| {
+
+            let action = match n {
+                0 => None,
+                _ => {
+                    let out = buf[0..n].into_iter().map(|c| *c).collect::<Vec<_>>();
+                    Some(Action::Out(out))
+                }
+            };
+            if let Some(action) = action {
                 // debug!("read finish!");
                 if send.send(action::Action::GdbRead(action)).is_err() {
-                    error!("gdb tty read but send fail! {:?}", &buf[0..10]);
+                    error!("gdb tty read but send fail! {:?}", &buf[0..buf.len()]);
                 };
-            });
+            };
         }
     }
 
@@ -150,7 +132,7 @@ impl Component for Gdbtty {
     ) -> Result<Option<action::Action>> {
         if let Some(bytes) = Gdbtty::handle_pane_key_event(&key) {
             let bytes = bytes.into_iter().map(|c| char::from(c)).collect::<String>();
-            if let Some(mut write) = self.gdb_writer.as_mut() {
+            if let Some(write) = self.gdb_writer.as_mut() {
                 write!(write, "{}", bytes.as_str())?;
             }
         };
@@ -183,6 +165,7 @@ impl Component for Gdbtty {
                 pixel_height: 0,
             })
             .map_err(|e| eyre!(format!("{:?}", e)))?;
+        
 
         // Spawn a shell into the pty
         let cmd = CommandBuilder::new("gdb");
