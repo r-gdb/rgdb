@@ -13,6 +13,45 @@ pub enum Tok {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub enum OutOfBandRecordType {
+    AsyncRecord(AsyncRecordType),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum AsyncRecordType {
+    NotifyAsyncOutput(NotifyAsyncOutputType),
+    ExecAsyncOutput(ExecAsyncOutputType),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ExecAsyncOutputType {
+    pub async_output: AsyncOutputType,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct NotifyAsyncOutputType {
+    pub async_output: AsyncOutputType,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct AsyncOutputType {
+    pub async_class: AsyncClassType,
+    pub resaults: Vec<ResultType>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum AsyncClassType {
+    Stopped,
+    Running,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum NewLineType {
+    Linux,
+    Windows,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ValueType {
     ConstType(String),
     TupleType(TupleType),
@@ -93,7 +132,6 @@ mod tests {
 
     #[test]
     fn f_c_string() {
-        let s = apply_string_escapes(r##""3asdfwerasdf""##);
         let s = r##""3asdfwerasdf""##;
         let a = miout::TokCStringParser::new().parse(s);
         println!("s:{:?} {} {:?}", &s, s.len(), &a);
@@ -209,6 +247,95 @@ mod tests {
                 ])
         );
     }
+
+    #[test]
+    fn f_to_k_async_output_type() {
+        let a = miout::TokOutOfBandRecordParser::new()
+        .parse(r##"=stopped,reason="end-stepping-range",frame={addr="0x00000000004006ff",func="main",args=[],file="a.c",fullname="/home/shizhilvren/c++/a.c",line="27"},thread-id="1",stopped-threads="all",core="6""##);
+        println!("{:?}", &a);
+        assert!(
+            a.unwrap()
+                == OutOfBandRecordType::AsyncRecord(AsyncRecordType::NotifyAsyncOutput(
+                    NotifyAsyncOutputType {
+                        async_output: AsyncOutputType {
+                            async_class: AsyncClassType::Stopped,
+                            resaults: vec![
+                                ResultType {
+                                    variable: "reason".to_string(),
+                                    value: ValueType::ConstType("end-stepping-range".to_string()),
+                                },
+                                ResultType {
+                                    variable: "frame".to_string(),
+                                    value: ValueType::TupleType(TupleType::Results(vec![
+                                        ResultType {
+                                            variable: "addr".to_string(),
+                                            value: ValueType::ConstType(
+                                                "0x00000000004006ff".to_string()
+                                            ),
+                                        },
+                                        ResultType {
+                                            variable: "func".to_string(),
+                                            value: ValueType::ConstType("main".to_string()),
+                                        },
+                                        ResultType {
+                                            variable: "args".to_string(),
+                                            value: ValueType::ListType(ListType::None),
+                                        },
+                                        ResultType {
+                                            variable: "file".to_string(),
+                                            value: ValueType::ConstType("a.c".to_string()),
+                                        },
+                                        ResultType {
+                                            variable: "fullname".to_string(),
+                                            value: ValueType::ConstType(
+                                                "/home/shizhilvren/c++/a.c".to_string()
+                                            ),
+                                        },
+                                        ResultType {
+                                            variable: "line".to_string(),
+                                            value: ValueType::ConstType("27".to_string()),
+                                        },
+                                    ]))
+                                },
+                                ResultType {
+                                    variable: "thread-id".to_string(),
+                                    value: ValueType::ConstType("1".to_string()),
+                                },
+                                ResultType {
+                                    variable: "stopped-threads".to_string(),
+                                    value: ValueType::ConstType("all".to_string()),
+                                },
+                                ResultType {
+                                    variable: "core".to_string(),
+                                    value: ValueType::ConstType("6".to_string()),
+                                },
+                            ],
+                        }
+                    }
+                ))
+        );
+    }
+    #[test]
+
+    fn f_tok_exec_async_output_type() {
+        let a = miout::TokOutOfBandRecordParser::new().parse(r##"*running,thread-id="1""##);
+        println!("{:?}", &a);
+        assert!(
+            a.unwrap()
+                == OutOfBandRecordType::AsyncRecord(AsyncRecordType::ExecAsyncOutput(
+                    ExecAsyncOutputType {
+                        async_output: AsyncOutputType {
+                            async_class: AsyncClassType::Running,
+                            resaults: vec![ResultType {
+                                variable: "thread-id".to_string(),
+                                value: ValueType::ConstType("1".to_string()),
+                            }]
+                        }
+                    }
+                ))
+        );
+    }
+
     #[test]
     fn f0() {
         // let s: Vec<String> = vec![];

@@ -18,7 +18,7 @@ mod errors;
 mod logging;
 mod tool;
 mod tui;
-mod token;
+mod mi;
 
 #[tokio::main]
 async fn main() -> Result<()> {

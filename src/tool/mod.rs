@@ -2,8 +2,6 @@ use color_eyre::{eyre::Ok, Result};
 use libc::ptsname;
 use ratatui::layout::{Constraint, Layout, Rect};
 use std::ffi::CStr;
-use lalrpop_util::lalrpop_mod;
-
 
 pub fn get_pty_name(fd: i32) -> Result<String> {
     let name = unsafe { ptsname(fd) };
@@ -19,13 +17,3 @@ pub fn get_layout(area: Rect) -> [Rect; 3] {
     ])
     .areas(area)
 }
-
- macro_rules!  lalrpop_mod_doc {
-    ($vis:vis $name:ident) => {
-        lalrpop_util::lalrpop_mod!(
-            #[allow(clippy::ptr_arg)]
-            #[allow(clippy::vec_box)]
-            $vis $name);
-    }
-}
-pub(crate) use lalrpop_mod_doc;

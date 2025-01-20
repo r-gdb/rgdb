@@ -1,11 +1,11 @@
 use super::{gdbtty, Component};
 use crate::tool;
-use crate::tool::lalrpop_mod_doc;
 use crate::{action, config::Config};
 // use bytes;
 use color_eyre::{eyre::eyre, eyre::Ok, Result};
 use lalrpop_util::lalrpop_mod;
 use lazy_static::lazy_static;
+use miout::TokOutOfBandRecordParser;
 use portable_pty::{native_pty_system, PtySize};
 use ratatui::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -19,6 +19,7 @@ lalrpop_mod!(
     miout,
     "/mi/miout.rs"
 );
+use crate::mi::token::*;
 
 #[derive(Default)]
 pub struct Gdbmi {
@@ -34,6 +35,7 @@ pub struct Gdbmi {
 pub enum Action {
     Start,
     Out(String),
+    ShowFile((String, u64)),
 }
 
 impl Gdbmi {
@@ -55,7 +57,7 @@ impl Gdbmi {
             // debug!("read start!");
             let n = reader.read(&mut buf).map_or(0, |n| n);
 
-            let mut actions = vec![];
+            let mut out_line = vec![];
             match n {
                 0 => {}
                 _ => {
@@ -66,13 +68,24 @@ impl Gdbmi {
                         .for_each(|f| match f {
                             '\n' => {
                                 line.push(f);
-                                actions.push(Action::Out(line.clone()));
+                                out_line.push(line.clone());
                                 line.clear()
                             }
                             _ => line.push(f),
                         });
                 }
             };
+            let mut actions = vec![];
+            out_line.into_iter().for_each(|line| {
+                if let std::result::Result::Ok(a) =
+                    miout::TokOutOfBandRecordParser::new().parse(line.as_str())
+                {
+                    if let Some(show) = show_file(&a) {
+                        actions.push(Action::ShowFile(show));
+                    }
+                }
+                actions.push(Action::Out(line));
+            });
             actions.into_iter().for_each(|action| {
                 if send.send(action::Action::Gdbmi(action)).is_err() {
                     error!("gdb tty read but send fail! {:?}", &buf[0..buf.len()]);
@@ -174,3 +187,50 @@ impl Component for Gdbmi {
     }
 }
 
+fn show_file(a: &OutOfBandRecordType) -> Option<(String, u64)> {
+    let mut file = "".to_string();
+    let mut line = 0 as u64;
+    if let OutOfBandRecordType::AsyncRecord(AsyncRecordType::ExecAsyncOutput(a)) = a {
+        if a.async_output.async_class == AsyncClassType::Stopped {
+            a.async_output.resaults.iter().for_each(
+                |ResultType { variable, value }| match variable.as_str() {
+                    "frame" => {
+                        if let ValueType::TupleType(TupleType::Results(rs)) = value {
+                            rs.iter().for_each(|r| match r.variable.as_str() {
+                                "fullname" => {
+                                    if let ValueType::ConstType(f) = &r.value {
+                                        file = f.clone()
+                                    }
+                                }
+                                "line" => {
+                                    if let ValueType::ConstType(l) = &r.value {
+                                        if let std::result::Result::Ok(l) = l.parse::<u64>() {
+                                            line = l
+                                        }
+                                    }
+                                }
+                                _ => {}
+                            });
+                        }
+                    }
+                    _ => {}
+                },
+            );
+        }
+    }
+    let ret = if file != "" && line != 0 {
+        Some((file, line))
+    } else {
+        None
+    };
+    ret
+}
+
+#[test]
+fn f_show_file() {
+    let a = miout::TokOutOfBandRecordParser::new()
+        .parse(r##"*stopped,reason="end-stepping-range",frame={addr="0x00000000004006ff",func="main",args=[],file="a.c",fullname="/home/shizhilvren/c++/a.c",line="27"},thread-id="1",stopped-threads="all",core="6""##);
+    let b = show_file(&a.as_ref().unwrap());
+    println!("{:?} {:?}", &a, &b);
+    assert!(b == Some(("/home/shizhilvren/c++/a.c".to_string(), 27 as u64)));
+}

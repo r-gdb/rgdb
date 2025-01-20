@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use crate::token::*;
+use crate::mi::token::*;
 
 grammar;
 
@@ -9,28 +9,49 @@ match {
     _
 }
 
+pub TokOutOfBandRecord:OutOfBandRecordType = {
+    <a:TokAsyncRecord> => OutOfBandRecordType::AsyncRecord(a),
+}
 
-pub TokNum:String = {
-    <s:r"\d"> => String::from(s),
-};
+pub TokAsyncRecord:AsyncRecordType = {
+    <a:TokNotifyAsyncOutput> => AsyncRecordType::NotifyAsyncOutput(a),
+    <a:TokExecAsyncOutput> => AsyncRecordType::ExecAsyncOutput(a),
+}
 
-pub TokEq:Tok = {
-    "="=>Tok::Eq,
-};
-pub TokDoubleQuotes:Tok = {
-    "\"" => Tok::DoubleQuotes,
-};
-pub TokComma:Tok = {
-    ","=>Tok::Comma,
-};
 
+pub TokExecAsyncOutput:ExecAsyncOutputType = {
+    "*" <a:TokAsyncOutput> => ExecAsyncOutputType{ async_output:a },
+}
+
+pub TokNotifyAsyncOutput:NotifyAsyncOutputType = {
+    <e:TokEq> <a:TokAsyncOutput> => NotifyAsyncOutputType{ async_output:a },
+} 
+
+pub TokAsyncOutput:AsyncOutputType = {
+    <e:TokAsyncClass> <v: (<TokComma> <TokResult>)* > => {
+        let v = v.into_iter().map(|(c, r)| r).collect::<Vec<ResultType>>();
+        AsyncOutputType{ async_class:e, resaults:v}
+    },
+}
+
+pub TokStopped:AsyncClassType = {
+    "s" "t" "o" "p" "p" "e" "d" =>AsyncClassType::Stopped,
+}
+
+pub TokRunning:AsyncClassType = {
+    "r" "u" "n" "n" "i" "n" "g" =>AsyncClassType::Running,
+}
+
+pub TokAsyncClass:AsyncClassType = {
+    <s:TokStopped> => s,
+    <s:TokRunning> => s,
+}
 
 pub TokValue:ValueType = {
     <c:TokConst> => ValueType::ConstType(c),
     <t:TokTuple> => ValueType::TupleType(t),
     <l:TokList> => ValueType::ListType(l),
 };
-
 
 pub TokTuple:TupleType = {
     "{" "}" => TupleType::None,
@@ -55,15 +76,9 @@ pub TokList:ListType = {
     },
 };
 
-
-
-
 pub TokResult:ResultType = {
     <ver:TokVariable> <e:TokEq> <val:TokValue> => ResultType{variable:ver, value:val,},
 };
-
-
-
 
 pub TokVariable : String = {
     <s:TokString> => s,
@@ -71,21 +86,6 @@ pub TokVariable : String = {
 
 pub TokConst: String = {
     <s:TokCString> => s,
-};
-
-pub TokStringChar:String = {
-    // r##"\""##=>String::from_str(&apply_string_escapes(r##"\""##)).unwrap(),
-    // r##"\\"##=>String::from_str(&apply_string_escapes(r##"\\"##)).unwrap(),
-    // r##"\r"##=>String::from_str(&apply_string_escapes(r##"\r"##)).unwrap(),
-    // r##"\n"##=>String::from_str(&apply_string_escapes(r##"\n"##)).unwrap(),
-    // r##"\t"##=>String::from_str(&apply_string_escapes(r##"\t"##)).unwrap(),
-    // <e:Eq> => String::from_str("=").unwrap(),
-    // Comma=>String::from_str(",").unwrap(),
-    <d:TokNum> => d,
-    <c:r"[a-zA-Z]">=>String::from_str(c).unwrap(),
-    <c:".">=>String::from_str(c).unwrap(),
-    <c:"/">=>String::from_str(c).unwrap(),
-    <c:"-">=>String::from_str(c).unwrap(),
 };
 
 pub TokString:String = {
@@ -97,4 +97,105 @@ pub TokCString:String = {
     <_a:TokDoubleQuotes> <s:(<TokStringChar>)*> <_b:TokDoubleQuotes> => vec_string_to_string(s),
 };
 
+pub TokNum:String = {
+    <s:r"\d"> => String::from(s),
+};
 
+pub TokEq:Tok = {
+    "="=>Tok::Eq,
+};
+
+pub TokDoubleQuotes:Tok = {
+    "\"" => Tok::DoubleQuotes,
+};
+
+pub TokComma:Tok = {
+    ","=>Tok::Comma,
+};
+
+pub TokNewLine:NewLineType = {
+    "\r" "\n" => NewLineType::Windows,
+    "\n" => NewLineType::Linux,
+}
+
+pub TokStringChar:String = {
+    // r##"\""##=>String::from_str(&apply_string_escapes(r##"\""##)).unwrap(),
+    // r##"\\"##=>String::from_str(&apply_string_escapes(r##"\\"##)).unwrap(),
+    // r##"\r"##=>String::from_str(&apply_string_escapes(r##"\r"##)).unwrap(),
+    // r##"\n"##=>String::from_str(&apply_string_escapes(r##"\n"##)).unwrap(),
+    // r##"\t"##=>String::from_str(&apply_string_escapes(r##"\t"##)).unwrap(),
+    // <e:Eq> => String::from_str("=").unwrap(),
+    // Comma=>String::from_str(",").unwrap(),
+    <d:TokNum> => d,
+    <c:"A"> => String::from_str(c).unwrap(),
+    <c:"B"> => String::from_str(c).unwrap(),
+    <c:"C"> => String::from_str(c).unwrap(),
+    <c:"D"> => String::from_str(c).unwrap(),
+    <c:"E"> => String::from_str(c).unwrap(),
+    <c:"F"> => String::from_str(c).unwrap(),
+    <c:"G"> => String::from_str(c).unwrap(),
+    <c:"H"> => String::from_str(c).unwrap(),
+    <c:"I"> => String::from_str(c).unwrap(),
+    <c:"J"> => String::from_str(c).unwrap(),
+    <c:"K"> => String::from_str(c).unwrap(),
+    <c:"L"> => String::from_str(c).unwrap(),
+    <c:"M"> => String::from_str(c).unwrap(),
+    <c:"N"> => String::from_str(c).unwrap(),
+    <c:"O"> => String::from_str(c).unwrap(),
+    <c:"P"> => String::from_str(c).unwrap(),
+    <c:"Q"> => String::from_str(c).unwrap(),
+    <c:"R"> => String::from_str(c).unwrap(),
+    <c:"S"> => String::from_str(c).unwrap(),
+    <c:"T"> => String::from_str(c).unwrap(),
+    <c:"U"> => String::from_str(c).unwrap(),
+    <c:"V"> => String::from_str(c).unwrap(),
+    <c:"W"> => String::from_str(c).unwrap(),
+    <c:"X"> => String::from_str(c).unwrap(),
+    <c:"Y"> => String::from_str(c).unwrap(),
+    <c:"Z"> => String::from_str(c).unwrap(),
+    <c:"a"> => String::from_str(c).unwrap(),
+    <c:"b"> => String::from_str(c).unwrap(),
+    <c:"c"> => String::from_str(c).unwrap(),
+    <c:"d"> => String::from_str(c).unwrap(),
+    <c:"e"> => String::from_str(c).unwrap(),
+    <c:"f"> => String::from_str(c).unwrap(),
+    <c:"g"> => String::from_str(c).unwrap(),
+    <c:"h"> => String::from_str(c).unwrap(),
+    <c:"i"> => String::from_str(c).unwrap(),
+    <c:"j"> => String::from_str(c).unwrap(),
+    <c:"k"> => String::from_str(c).unwrap(),
+    <c:"l"> => String::from_str(c).unwrap(),
+    <c:"m"> => String::from_str(c).unwrap(),
+    <c:"n"> => String::from_str(c).unwrap(),
+    <c:"o"> => String::from_str(c).unwrap(),
+    <c:"p"> => String::from_str(c).unwrap(),
+    <c:"q"> => String::from_str(c).unwrap(),
+    <c:"r"> => String::from_str(c).unwrap(),
+    <c:"s"> => String::from_str(c).unwrap(),
+    <c:"t"> => String::from_str(c).unwrap(),
+    <c:"u"> => String::from_str(c).unwrap(),
+    <c:"v"> => String::from_str(c).unwrap(),
+    <c:"w"> => String::from_str(c).unwrap(),
+    <c:"x"> => String::from_str(c).unwrap(),
+    <c:"y"> => String::from_str(c).unwrap(),
+    <c:"z"> => String::from_str(c).unwrap(),
+
+    <c:"/"> => String::from_str(c).unwrap(),
+    <c:"_"> => String::from_str(c).unwrap(),
+    // // some block char "\s"
+    <c:" "> => String::from_str(c).unwrap(),
+    <c:"\t"> => String::from_str(c).unwrap(),
+    // // special char
+    <c:"-"> => String::from_str(c).unwrap(),
+    <c:"^"> => String::from_str(c).unwrap(),
+    <c:"$"> => String::from_str(c).unwrap(),
+    <c:"("> => String::from_str(c).unwrap(),
+    <c:")"> => String::from_str(c).unwrap(),
+    <c:"*"> => String::from_str(c).unwrap(),
+    <c:"+"> => String::from_str(c).unwrap(),
+    <c:"?"> => String::from_str(c).unwrap(),
+    <c:"."> => String::from_str(c).unwrap(),
+    // <c:"["> => String::from_str(c).unwrap(),
+    // <c:"{"> => String::from_str(c).unwrap(),
+    <c:"|"> => String::from_str(c).unwrap(),
+};
