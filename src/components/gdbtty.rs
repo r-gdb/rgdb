@@ -147,7 +147,7 @@ impl Component for Gdbtty {
         }
         Ok(None)
     }
-    fn init(&mut self, _area: Size) -> Result<()> {
+    fn init(&mut self, area: Size) -> Result<()> {
         // Use the native pty implementation for the system
         let pty_system = native_pty_system();
 
@@ -155,7 +155,7 @@ impl Component for Gdbtty {
         let pair = pty_system
             .openpty(PtySize {
                 rows: 24,
-                cols: 80,
+                cols: area.width.saturating_sub(2).max(2),
                 // Not all systems support pixel_width, pixel_height,
                 // but it is good practice to set it to something
                 // that matches the size of the selected font.  That

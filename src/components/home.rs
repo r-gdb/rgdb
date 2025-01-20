@@ -122,9 +122,10 @@ impl Component for Home {
         let cursor_show = self.vertical_scroll == 0;
         // self.vt100_parser.set_scrollback(2);
         let title = format!(
-            "gdb cmd {}/{} area size {:?}",
+            "gdb cmd {}/{} {} area size {:?}",
             n - self.vertical_scroll,
             n,
+            screen.scrollback(),
             screen.size()
         );
         let pseudo_term = PseudoTerminal::new(screen)
