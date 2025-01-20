@@ -1,15 +1,11 @@
-use std::{io::Read, usize};
-
 use super::{gdbtty, Component};
 use crate::{action::Action, config::Config};
-use ansi_to_tui::IntoText;
 use color_eyre::{eyre::Ok, Result};
-use crossterm::cursor;
 use ratatui::{prelude::*, widgets::*};
-use std::collections::VecDeque;
+use std::usize;
 use symbols::scrollbar;
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::debug;
+// use tracing::debug;
 use tui_term::widget::PseudoTerminal;
 
 #[derive(Default)]
@@ -33,7 +29,7 @@ impl Home {
             vertical_scroll: s.vertical_scroll,
         }
     }
-    fn get_text_hight(&mut self, area: &Rect) -> usize {
+    fn get_text_hight(&mut self, _area: &Rect) -> usize {
         let now_scrollback = self.vt100_parser.screen().scrollback();
         self.vt100_parser.set_scrollback(usize::MAX);
         let ret = self.vt100_parser.screen().scrollback();
@@ -85,7 +81,7 @@ impl Component for Home {
                 self.vertical_scroll_state =
                     self.vertical_scroll_state.position(self.vertical_scroll);
             }
-            Action::GdbRead(gdbtty::Action::Out(out)) => {
+            Action::Gdbtty(gdbtty::Action::Out(out)) => {
                 self.vt100_parser.process(out.as_slice());
                 self.vt100_parser.set_scrollback(0);
                 self.vertical_scroll = 0;

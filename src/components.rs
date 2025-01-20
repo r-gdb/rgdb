@@ -5,11 +5,12 @@ use ratatui::{
     Frame,
 };
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::debug;
+// use tracing::debug;
 
 use crate::{action::Action, config::Config, tui::Event};
 
 pub mod fps;
+pub mod gdbmi;
 pub mod gdbtty;
 pub mod home;
 

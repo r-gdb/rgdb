@@ -1,7 +1,7 @@
-use std::{io::Read, str::Bytes};
-
 use super::Component;
+use crate::tool;
 use crate::{action, config::Config};
+use std::str::FromStr;
 // use bytes;
 use color_eyre::{eyre::eyre, eyre::Ok, Result};
 use portable_pty::{native_pty_system, Child, CommandBuilder, PtySize};
@@ -9,8 +9,8 @@ use ratatui::prelude::*;
 use serde::{Deserialize, Serialize};
 use strum::Display;
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
-use tracing::debug;
 use tracing::error;
+use tracing::{debug, info};
 
 #[derive(Default)]
 pub struct Gdbtty {
@@ -32,6 +32,7 @@ impl Gdbtty {
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
 pub enum Action {
     Out(Vec<u8>),
+    Start(String),
 }
 
 impl Gdbtty {
@@ -53,11 +54,84 @@ impl Gdbtty {
             };
             if let Some(action) = action {
                 // debug!("read finish!");
-                if send.send(action::Action::GdbRead(action)).is_err() {
+                if send.send(action::Action::Gdbtty(action)).is_err() {
                     error!("gdb tty read but send fail! {:?}", &buf[0..buf.len()]);
                 };
             };
         }
+    }
+    fn gdbtty_start(&mut self, path: String) -> Result<()> {
+        let pty_system = native_pty_system();
+        let pair = pty_system
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                // Not all systems support pixel_width, pixel_height,
+                // but it is good practice to set it to something
+                // that matches the size of the selected font.  That
+                // is more complex than can be shown here in this
+                // brief example though!
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|e| eyre!(format!("{:?}", e)))?;
+        let s = format!("new-ui mi {}", path.as_str());
+        let args = vec!["gdb", "--nw", "--ex", s.as_str()]
+            .iter()
+            .map(|s| -> Result<std::ffi::OsString> { Ok(std::ffi::OsString::from_str(s)?) })
+            .collect::<Result<Vec<_>>>()?;
+        // Spawn a shell into the pty
+        let cmd = CommandBuilder::from_argv(args);
+        let child = pair
+            .slave
+            .spawn_command(cmd)
+            .map_err(|e| eyre!(format!("{:?}", e)))?;
+        self.gdb_process = Some(child);
+
+        // Read and parse output from the pty with reader
+        let gdb_reader = pair
+            .master
+            .try_clone_reader()
+            .map_err(|e| eyre!(format!("{:?}", e)))?;
+        self.gdb_reader = Some(gdb_reader);
+
+        // Send data to the pty by writing to the master
+        let gdb_writer = pair
+            .master
+            .take_writer()
+            .map_err(|e| eyre!(format!("{:?}", e)))?;
+        self.gdb_writer = Some(gdb_writer);
+
+        match pair.master.as_raw_fd() {
+            Some(fd) => {
+                let pty_name = tool::get_pty_name(fd)?;
+                info!("gdb tty start at {}", &pty_name);
+                Ok(format!("{}", pty_name))
+            }
+            _ => Err(eyre!("gdb mi pty start fail!")),
+        }?;
+
+        let gdb_reader = pair
+            .master
+            .try_clone_reader()
+            .map_err(|e| eyre!(format!("{:?}", e)))?;
+
+        let ret = match self.command_tx.clone() {
+            Some(send) => {
+                let reader_task = Self::gdbtty_reader(gdb_reader, send.clone());
+                self.gdb_read_task = Some(tokio::spawn(async {
+                    reader_task.await;
+                }));
+                debug!("gdb start");
+                Ok(())
+            }
+            _ => {
+                let msg = "gdb reader thread not start";
+                error!("{}", &msg);
+                Err(eyre!(msg))
+            }
+        };
+        ret
     }
 
     fn handle_pane_key_event(key: &crossterm::event::KeyEvent) -> Option<Vec<u8>> {
@@ -139,71 +213,22 @@ impl Component for Gdbtty {
         Ok(None)
     }
 
-    fn update(&mut self, _action: action::Action) -> Result<Option<action::Action>> {
+    fn update(&mut self, action: action::Action) -> Result<Option<action::Action>> {
         if let Some(t) = &self.gdb_read_task {
             if t.is_finished() {
                 error!("gdb task finish!");
             };
         }
+        // debug!("gdb update action{:?}", &action);
+        match action {
+            action::Action::Gdbtty(Action::Start(path)) => {
+                self.gdbtty_start(path)?;
+            }
+            _ => {}
+        }
         Ok(None)
     }
-    fn init(&mut self, area: Size) -> Result<()> {
-        // Use the native pty implementation for the system
-        let pty_system = native_pty_system();
-
-        // Create a new pty
-        let pair = pty_system
-            .openpty(PtySize {
-                rows: 24,
-                cols: area.width.saturating_sub(2).max(2),
-                // Not all systems support pixel_width, pixel_height,
-                // but it is good practice to set it to something
-                // that matches the size of the selected font.  That
-                // is more complex than can be shown here in this
-                // brief example though!
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|e| eyre!(format!("{:?}", e)))?;
-        
-
-        // Spawn a shell into the pty
-        let cmd = CommandBuilder::new("gdb");
-        let child = pair
-            .slave
-            .spawn_command(cmd)
-            .map_err(|e| eyre!(format!("{:?}", e)))?;
-        self.gdb_process = Some(child);
-
-        // Read and parse output from the pty with reader
-        let gdb_reader = pair
-            .master
-            .try_clone_reader()
-            .map_err(|e| eyre!(format!("{:?}", e)))?;
-        self.gdb_reader = Some(gdb_reader);
-
-        // Send data to the pty by writing to the master
-        let gdb_writer = pair
-            .master
-            .take_writer()
-            .map_err(|e| eyre!(format!("{:?}", e)))?;
-        self.gdb_writer = Some(gdb_writer);
-
-        let gdb_reader = pair
-            .master
-            .try_clone_reader()
-            .map_err(|e| eyre!(format!("{:?}", e)))?;
-
-        if let Some(send) = self.command_tx.clone() {
-            let reader_task = Self::gdbtty_reader(gdb_reader, send.clone());
-            self.gdb_read_task = Some(tokio::spawn(async {
-                reader_task.await;
-            }));
-        } else {
-            let msg = "gdb reader thread not start";
-            error!("{}", &msg);
-            return Err(eyre!(msg));
-        }
+    fn init(&mut self, _area: Size) -> Result<()> {
         Ok(())
     }
 }
