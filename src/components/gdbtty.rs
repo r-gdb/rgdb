@@ -4,7 +4,7 @@ use crate::{action, config::Config};
 use std::str::FromStr;
 // use bytes;
 use color_eyre::{eyre::eyre, eyre::Ok, Result};
-use portable_pty::{native_pty_system, Child, CommandBuilder, PtySize};
+use portable_pty::{native_pty_system, Child, CommandBuilder, PtyPair, PtySize};
 use ratatui::prelude::*;
 use serde::{Deserialize, Serialize};
 use strum::Display;
@@ -21,6 +21,7 @@ pub struct Gdbtty {
     gdb_reader: Option<Box<dyn std::io::Read + Send>>,
     gdb_process: Option<Box<dyn Child + Send + Sync>>,
     gdb_read_task: Option<JoinHandle<()>>,
+    pty_pair: Option<PtyPair>,
 }
 
 impl Gdbtty {
@@ -131,6 +132,7 @@ impl Gdbtty {
                 Err(eyre!(msg))
             }
         };
+        self.pty_pair = Some(pair);
         ret
     }
 
@@ -197,7 +199,23 @@ impl Component for Gdbtty {
         Ok(())
     }
 
-    fn draw(&mut self, _frame: &mut Frame, _area: Rect) -> Result<()> {
+    fn draw(&mut self, _frame: &mut Frame, area: Rect) -> Result<()> {
+        let [_, _, area] = tool::get_layout(area);
+        let area = area.inner(Margin {
+            horizontal: 1,
+            vertical: 1,
+        });
+        if let Some(pty_pair) = &self.pty_pair {
+            pty_pair
+                .master
+                .resize(PtySize {
+                    rows: area.height,
+                    cols: area.width,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })
+                .map_err(|e| eyre!("resize gdb tty fail {:?}", e))?
+        }
         Ok(())
     }
     fn handle_key_event(

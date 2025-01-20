@@ -6,6 +6,7 @@ use std::usize;
 use symbols::scrollbar;
 use tokio::sync::mpsc::UnboundedSender;
 // use tracing::debug;
+use crate::tool;
 use tui_term::widget::PseudoTerminal;
 
 #[derive(Default)]
@@ -94,12 +95,7 @@ impl Component for Home {
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
         // debug!("start one draw");
-        let [_, _, area] = Layout::vertical([
-            Constraint::Min(1),
-            Constraint::Percentage(75),
-            Constraint::Percentage(25),
-        ])
-        .areas(area);
+        let [_, _, area] = tool::get_layout(area);
         let in_size = area
             .inner(Margin {
                 vertical: 1,
