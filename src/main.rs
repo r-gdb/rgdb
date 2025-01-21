@@ -1,9 +1,14 @@
 use clap::Parser;
 use cli::Cli;
 use color_eyre::Result;
-
+use lalrpop_util::lalrpop_mod;
 use crate::app::App;
-
+lalrpop_mod!(
+    #[allow(clippy::ptr_arg)]
+    #[allow(clippy::vec_box)]
+    miout,
+    "/mi/miout.rs"
+);
 mod action;
 mod app;
 mod cli;
@@ -13,6 +18,7 @@ mod errors;
 mod logging;
 mod tool;
 mod tui;
+mod token;
 
 #[tokio::main]
 async fn main() -> Result<()> {

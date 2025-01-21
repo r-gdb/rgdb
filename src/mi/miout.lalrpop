@@ -1,0 +1,100 @@
+use std::str::FromStr;
+use crate::token::*;
+
+grammar;
+
+match {
+    "\"",
+} else {
+    _
+}
+
+
+pub TokNum:String = {
+    <s:r"\d"> => String::from(s),
+};
+
+pub TokEq:Tok = {
+    "="=>Tok::Eq,
+};
+pub TokDoubleQuotes:Tok = {
+    "\"" => Tok::DoubleQuotes,
+};
+pub TokComma:Tok = {
+    ","=>Tok::Comma,
+};
+
+
+pub TokValue:ValueType = {
+    <c:TokConst> => ValueType::ConstType(c),
+    <t:TokTuple> => ValueType::TupleType(t),
+    <l:TokList> => ValueType::ListType(l),
+};
+
+
+pub TokTuple:TupleType = {
+    "{" "}" => TupleType::None,
+    "{" <v:(<TokResult> <TokComma>)* > <e:TokResult> "}" => {
+        let mut v = v.into_iter().map(|(r, c)| r).collect::<Vec<ResultType>>();
+        v.push(e);
+        TupleType::Results(v)
+    },
+};
+
+pub TokList:ListType = {
+    "[" "]" => ListType::None,
+    "[" <v:(<TokResult> <TokComma>)* > <e:TokResult> "]" => {
+        let mut v = v.into_iter().map(|(r, c)| r).collect::<Vec<ResultType>>();
+        v.push(e);
+        ListType::ResultList(v)
+    },
+    "[" <v:(<TokValue> <TokComma>)* > <e:TokValue> "]" => {
+        let mut v = v.into_iter().map(|(r, c)| r).collect::<Vec<ValueType>>();
+        v.push(e);
+        ListType::ValueList(v)
+    },
+};
+
+
+
+
+pub TokResult:ResultType = {
+    <ver:TokVariable> <e:TokEq> <val:TokValue> => ResultType{variable:ver, value:val,},
+};
+
+
+
+
+pub TokVariable : String = {
+    <s:TokString> => s,
+};
+
+pub TokConst: String = {
+    <s:TokCString> => s,
+};
+
+pub TokStringChar:String = {
+    // r##"\""##=>String::from_str(&apply_string_escapes(r##"\""##)).unwrap(),
+    // r##"\\"##=>String::from_str(&apply_string_escapes(r##"\\"##)).unwrap(),
+    // r##"\r"##=>String::from_str(&apply_string_escapes(r##"\r"##)).unwrap(),
+    // r##"\n"##=>String::from_str(&apply_string_escapes(r##"\n"##)).unwrap(),
+    // r##"\t"##=>String::from_str(&apply_string_escapes(r##"\t"##)).unwrap(),
+    // <e:Eq> => String::from_str("=").unwrap(),
+    // Comma=>String::from_str(",").unwrap(),
+    <d:TokNum> => d,
+    <c:r"[a-zA-Z]">=>String::from_str(c).unwrap(),
+    <c:".">=>String::from_str(c).unwrap(),
+    <c:"/">=>String::from_str(c).unwrap(),
+    <c:"-">=>String::from_str(c).unwrap(),
+};
+
+pub TokString:String = {
+   < s:(<TokStringChar>)* > => vec_string_to_string(s),
+};
+
+// Num: i32 = <s:r"[0-9]+"> => i32::from_str(s).unwrap();
+pub TokCString:String = {
+    <_a:TokDoubleQuotes> <s:(<TokStringChar>)*> <_b:TokDoubleQuotes> => vec_string_to_string(s),
+};
+
+

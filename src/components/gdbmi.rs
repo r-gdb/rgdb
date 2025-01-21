@@ -1,9 +1,10 @@
 use super::{gdbtty, Component};
 use crate::tool;
+use crate::tool::lalrpop_mod_doc;
 use crate::{action, config::Config};
-
 // use bytes;
 use color_eyre::{eyre::eyre, eyre::Ok, Result};
+use lalrpop_util::lalrpop_mod;
 use lazy_static::lazy_static;
 use portable_pty::{native_pty_system, PtySize};
 use ratatui::prelude::*;
@@ -12,6 +13,12 @@ use strum::Display;
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tracing::error;
 use tracing::{debug, info};
+lalrpop_mod!(
+    #[allow(clippy::ptr_arg)]
+    #[allow(clippy::vec_box)]
+    miout,
+    "/mi/miout.rs"
+);
 
 #[derive(Default)]
 pub struct Gdbmi {
@@ -166,3 +173,4 @@ impl Component for Gdbmi {
         }
     }
 }
+
