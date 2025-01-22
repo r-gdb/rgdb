@@ -11,9 +11,9 @@ pub fn get_pty_name(fd: i32) -> Result<String> {
 
 pub fn get_layout(area: Rect) -> [Rect; 3] {
     Layout::vertical([
+        Constraint::Percentage(50),
         Constraint::Min(1),
-        Constraint::Percentage(75),
-        Constraint::Percentage(25),
+        Constraint::Percentage(50),
     ])
     .areas(area)
 }

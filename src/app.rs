@@ -7,7 +7,9 @@ use tracing::{debug, info};
 
 use crate::{
     action::Action,
-    components::{fps::FpsCounter, gdbmi::Gdbmi, gdbtty::Gdbtty, home::Home, Component},
+    components::{
+        code::Code, fps::FpsCounter, gdbmi::Gdbmi, gdbtty::Gdbtty, home::Home, Component,
+    },
     config::Config,
     tui::{Event, Tui},
 };
@@ -39,6 +41,7 @@ impl App {
             frame_rate,
             components: vec![
                 Box::new(Home::new()),
+                Box::new(Code::new()),
                 Box::new(FpsCounter::default()),
                 Box::new(Gdbmi::new()),
                 Box::new(Gdbtty::new()),
