@@ -7,6 +7,7 @@ use color_eyre::{eyre::eyre, eyre::Ok, Result};
 use portable_pty::{native_pty_system, Child, CommandBuilder, PtyPair, PtySize};
 use ratatui::prelude::*;
 use serde::{Deserialize, Serialize};
+use smol::io::AsyncReadExt;
 use strum::Display;
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tracing::error;
@@ -38,13 +39,14 @@ pub enum Action {
 
 impl Gdbtty {
     async fn gdbtty_reader(
-        mut reader: Box<dyn std::io::Read + Send>,
+        reader: Box<dyn std::io::Read + Send>,
         send: UnboundedSender<action::Action>,
     ) {
         let mut buf = [0_u8; 32];
+        let mut reader = smol::io::BufReader::new(smol::Unblock::new(reader));
         loop {
             // debug!("read start!");
-            let n = reader.read(&mut buf).map_or(0, |n| n);
+            let n = reader.read(&mut buf).await.map_or(0, |n| n);
 
             let action = match n {
                 0 => None,

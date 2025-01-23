@@ -5,7 +5,8 @@ use crate::{action, config::Config};
 use color_eyre::{eyre::eyre, eyre::Ok, Result};
 use lalrpop_util::lalrpop_mod;
 use lazy_static::lazy_static;
-use miout::TokOutOfBandRecordParser;
+use smol::io::AsyncReadExt;
+
 use portable_pty::{native_pty_system, PtySize};
 use ratatui::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -44,18 +45,20 @@ impl Gdbmi {
     }
 
     async fn gdb_mi_reader(
-        mut reader: Box<dyn std::io::Read + Send>,
+        reader: Box<dyn std::io::Read + Send>,
         send: UnboundedSender<action::Action>,
     ) {
-        lazy_static! {
-            static ref LINE: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
-        };
+        // lazy_static! {
+        //     static ref LINE: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+        // };
         let mut buf = [0_u8; 32];
-        let mut line = LINE.lock().unwrap();
+        let mut line = String::new();
+        let mut reader = smol::io::BufReader::new(smol::Unblock::new(reader));
 
         loop {
             // debug!("read start!");
-            let n = reader.read(&mut buf).map_or(0, |n| n);
+            // let n = reader.read(&mut buf).await.map_or(0, |n| n);
+            let n = reader.read(&mut buf).await.map_or(0, |n| n);
 
             let mut out_line = vec![];
             match n {
@@ -84,7 +87,7 @@ impl Gdbmi {
                         }
                     }
                     std::result::Result::Err(e) => {
-                        error!("unknow read gdb mi line {} {:?} ",&e, &line);
+                        error!("unknow read gdb mi line {} {:?} ", &e, &line);
                     }
                 }
                 // actions.push(Action::Out(line));

@@ -116,6 +116,7 @@ impl Code {
                             break;
                         }
                         std::result::Result::Ok(n) => {
+                            line = line.replace("\t", "    ");
                             match send.send(action::Action::Code(Action::FileReadOutLine((
                                 file.clone(),
                                 line,
@@ -257,10 +258,8 @@ impl Component for Code {
                 let n = file.get_lines_len();
                 let num_len = n.to_string().len() as u16;
                 let [area, _] = tool::get_layout(area);
-                let [area,area_status] = Layout::vertical([
-                    Constraint::Percentage(100),
-                    Constraint::Min(1),
-                ]).areas(area);
+                let [area, area_status] =
+                    Layout::vertical([Constraint::Percentage(100), Constraint::Min(1)]).areas(area);
                 let [area_ids, area_split, area_src] = Layout::horizontal([
                     Constraint::Min(num_len),
                     Constraint::Min(2),
@@ -318,7 +317,7 @@ impl Component for Code {
                 );
                 let paragraph_id = Paragraph::new(text_ids).right_aligned();
                 let paragraph_src = Paragraph::new(text_src);
-                let title = format!("{} cmd {}/{} ",file.file_name, n - self.vertical_scroll, n);
+                let title = format!("{} cmd {}/{} ", file.file_name, n - self.vertical_scroll, n);
                 let paragraph_status = Paragraph::new(title);
 
                 frame.render_widget(paragraph_id, area_ids);
