@@ -256,7 +256,11 @@ impl Component for Code {
             Some((file, line_id)) => {
                 let n = file.get_lines_len();
                 let num_len = n.to_string().len() as u16;
-                let [area, _, _] = tool::get_layout(area);
+                let [area, _] = tool::get_layout(area);
+                let [area,area_status] = Layout::vertical([
+                    Constraint::Percentage(100),
+                    Constraint::Min(1),
+                ]).areas(area);
                 let [area_ids, area_split, area_src] = Layout::horizontal([
                     Constraint::Min(num_len),
                     Constraint::Min(2),
@@ -280,13 +284,12 @@ impl Component for Code {
                 // self.vertical_scroll_state = self
                 //     .vertical_scroll_state
                 //     .position(n - self.vertical_scroll);
-                let title = format!("{} cmd {}/{} ",file.file_name, n - self.vertical_scroll, n);
                 let block_split = Block::new().borders(Borders::LEFT);
 
                 let block_src = Block::new()
                     .borders(Borders::RIGHT)
                     .style(Style::default())
-                    .title(title)
+                    // .title(title)
                     .title_alignment(Alignment::Center);
 
                 let text_src = Text::from(
@@ -315,10 +318,13 @@ impl Component for Code {
                 );
                 let paragraph_id = Paragraph::new(text_ids).right_aligned();
                 let paragraph_src = Paragraph::new(text_src);
+                let title = format!("{} cmd {}/{} ",file.file_name, n - self.vertical_scroll, n);
+                let paragraph_status = Paragraph::new(title);
 
                 frame.render_widget(paragraph_id, area_ids);
                 frame.render_widget(block_split, area_split);
                 frame.render_widget(paragraph_src, area_src);
+                frame.render_widget(paragraph_status, area_status);
                 frame.render_widget(block_src, area_src);
                 let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
                     .symbols(scrollbar::VERTICAL);
@@ -326,96 +332,6 @@ impl Component for Code {
             }
             _ => {}
         }
-
-        // let src_ids = match self.file_need_show {
-        //     Some((ref file, line_id)) => {
-        //         match self.files_set.get(&SrcFileData::new(file.clone())) {
-        //             Some(file_data) => {
-        //                 if file_data.get_read_done() {
-        //                     let src = file_data.get_lines();
-        //                     let ids = (0..src.len())
-        //                         .into_iter()
-        //                         .map(|i| (i + 1).to_string())
-        //                         .collect::<Vec<_>>();
-        //                     Some((src, ids))
-        //                 } else {
-        //                     info!("file {} not read done", &file);
-        //                     None
-        //                 }
-        //             }
-        //             _ => {
-        //                 error!("file {} not found", &file);
-        //                 None
-        //             }
-        //         }
-        //     }
-        //     _ => None,
-        // };
-        // match src_ids {
-        //     Some((src, ids)) => {
-        //         let n = src.len();
-        //         let num_len = n.to_string().len() as u16;
-        //         let [area, _, _] = tool::get_layout(area);
-        //         let [area_ids, area_split, area_src] = Layout::horizontal([
-        //             Constraint::Min(num_len),
-        //             Constraint::Min(2),
-        //             Constraint::Percentage(100),
-        //         ])
-        //         .areas(area);
-
-        //         self.vertical_scroll = self.vertical_scroll.min(n);
-        //         self.vertical_scroll_state = self.vertical_scroll_state.content_length(n);
-        //         self.vertical_scroll_state = self
-        //             .vertical_scroll_state
-        //             .position(n - self.vertical_scroll);
-        //         // self.vt100_parser.set_scrollback(2);
-        //         let title = format!("gdb cmd {}/{} ", n - self.vertical_scroll, n);
-        //         let block_split = Block::new().borders(Borders::LEFT);
-
-        //         let block_src = Block::new()
-        //             .borders(Borders::RIGHT)
-        //             .style(Style::default())
-        //             .title(title)
-        //             .title_alignment(Alignment::Center);
-
-        //         let text_src = Text::from(
-        //             src.iter()
-        //                 .map(|s| {
-        //                     Line::from(
-        //                         s.chars()
-        //                             .into_iter()
-        //                             .map(|c| Span::raw(c.to_string()))
-        //                             .collect::<Vec<_>>(),
-        //                     )
-        //                 })
-        //                 .collect::<Vec<_>>(),
-        //         );
-        //         let text_ids = Text::from(
-        //             ids.iter()
-        //                 .map(|s| {
-        //                     Line::from(
-        //                         s.chars()
-        //                             .into_iter()
-        //                             .map(|c| Span::raw(c.to_string()))
-        //                             .collect::<Vec<_>>(),
-        //                     )
-        //                 })
-        //                 .collect::<Vec<_>>(),
-        //         );
-        //         let paragraph_id = Paragraph::new(text_ids).right_aligned();
-        //         let paragraph_src = Paragraph::new(text_src);
-
-        //         frame.render_widget(paragraph_id, area_ids);
-        //         frame.render_widget(block_split, area_split);
-        //         frame.render_widget(paragraph_src, area_src);
-        //         frame.render_widget(block_src, area_src);
-        //         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-        //             .symbols(scrollbar::VERTICAL);
-        //         frame.render_stateful_widget(scrollbar, area, &mut self.vertical_scroll_state);
-        //         // debug!("end one draw");
-        //     }
-        //     _ => {}
-        // }
         Ok(())
     }
 }

@@ -95,7 +95,7 @@ impl Component for Home {
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
         // debug!("start one draw");
-        let [_, _, area] = tool::get_layout(area);
+        let [_, area] = tool::get_layout(area);
         let in_size = area
             .inner(Margin {
                 vertical: 1,
