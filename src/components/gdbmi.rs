@@ -4,7 +4,6 @@ use crate::{action, config::Config};
 // use bytes;
 use color_eyre::{eyre::eyre, eyre::Ok, Result};
 use lalrpop_util::lalrpop_mod;
-use lazy_static::lazy_static;
 use smol::io::AsyncReadExt;
 
 use portable_pty::{native_pty_system, PtySize};
