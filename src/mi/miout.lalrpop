@@ -94,7 +94,7 @@ pub TokString:String = {
 
 // Num: i32 = <s:r"[0-9]+"> => i32::from_str(s).unwrap();
 pub TokCString:String = {
-    <_a:TokDoubleQuotes> <s:(<TokStringChar>)*> <_b:TokDoubleQuotes> => vec_string_to_string(s),
+    <_a:TokDoubleQuotes> <s:(<TokCStringChar>)*> <_b:TokDoubleQuotes> => vec_string_to_string(s),
 };
 
 pub TokNum:String = {
@@ -119,40 +119,62 @@ pub TokNewLine:NewLineType = {
 }
 
 pub TokStringChar:String = {
-    // r##"\""##=>String::from_str(&apply_string_escapes(r##"\""##)).unwrap(),
-    // r##"\\"##=>String::from_str(&apply_string_escapes(r##"\\"##)).unwrap(),
-    // r##"\r"##=>String::from_str(&apply_string_escapes(r##"\r"##)).unwrap(),
-    // r##"\n"##=>String::from_str(&apply_string_escapes(r##"\n"##)).unwrap(),
-    // r##"\t"##=>String::from_str(&apply_string_escapes(r##"\t"##)).unwrap(),
-    // <e:Eq> => String::from_str("=").unwrap(),
-    // Comma=>String::from_str(",").unwrap(),
     <d:TokNum> => d,
-    <c:"A"> => String::from_str(c).unwrap(),
-    <c:"B"> => String::from_str(c).unwrap(),
-    <c:"C"> => String::from_str(c).unwrap(),
-    <c:"D"> => String::from_str(c).unwrap(),
-    <c:"E"> => String::from_str(c).unwrap(),
-    <c:"F"> => String::from_str(c).unwrap(),
-    <c:"G"> => String::from_str(c).unwrap(),
-    <c:"H"> => String::from_str(c).unwrap(),
-    <c:"I"> => String::from_str(c).unwrap(),
-    <c:"J"> => String::from_str(c).unwrap(),
-    <c:"K"> => String::from_str(c).unwrap(),
-    <c:"L"> => String::from_str(c).unwrap(),
-    <c:"M"> => String::from_str(c).unwrap(),
-    <c:"N"> => String::from_str(c).unwrap(),
-    <c:"O"> => String::from_str(c).unwrap(),
-    <c:"P"> => String::from_str(c).unwrap(),
-    <c:"Q"> => String::from_str(c).unwrap(),
-    <c:"R"> => String::from_str(c).unwrap(),
-    <c:"S"> => String::from_str(c).unwrap(),
-    <c:"T"> => String::from_str(c).unwrap(),
-    <c:"U"> => String::from_str(c).unwrap(),
-    <c:"V"> => String::from_str(c).unwrap(),
-    <c:"W"> => String::from_str(c).unwrap(),
-    <c:"X"> => String::from_str(c).unwrap(),
-    <c:"Y"> => String::from_str(c).unwrap(),
-    <c:"Z"> => String::from_str(c).unwrap(),
+    <c:TokLowercaseLetter> => c,
+    <c:TokUppercaseLetter> => c,
+    <c:"_"> => String::from_str(c).unwrap(),
+    <c:"-"> => String::from_str(c).unwrap(),
+};
+
+
+pub TokCStringChar:String = {
+    <c:" "> => String::from_str(c).unwrap(), //0x20
+    <c:"!"> => String::from_str(c).unwrap(),
+    <c1:"\\"> <c2:"\""> => String::from_str("\\\"").unwrap(),
+    <c:"#"> => String::from_str(c).unwrap(),
+    <c:"$"> => String::from_str(c).unwrap(),
+    <c:"%"> => String::from_str(c).unwrap(),
+    <c:"&"> => String::from_str(c).unwrap(),
+    <c:"'"> => String::from_str(c).unwrap(),
+    <c:"("> => String::from_str(c).unwrap(),
+    <c:")"> => String::from_str(c).unwrap(),
+    <c:"*"> => String::from_str(c).unwrap(),
+    <c:"+"> => String::from_str(c).unwrap(),
+    <c:","> => String::from_str(c).unwrap(),
+    <c:"-"> => String::from_str(c).unwrap(),
+    <c:"."> => String::from_str(c).unwrap(),
+    <c:"/"> => String::from_str(c).unwrap(),
+    <d:TokNum> => d,
+    <c:":"> => String::from_str(c).unwrap(),
+    <c:";"> => String::from_str(c).unwrap(),
+    <c:"<"> => String::from_str(c).unwrap(),
+    <c:TokEq> => String::from_str("=").unwrap(),
+    <c:">"> => String::from_str(c).unwrap(),
+    <c:"?"> => String::from_str(c).unwrap(),
+    <c:"@"> => String::from_str(c).unwrap(),
+    <c:TokUppercaseLetter> => c,
+    <c:"["> => String::from_str(c).unwrap(),
+    <c1:"\\"> <c2:"\\"> => String::from_str("\\\\").unwrap(),
+    <c:"]"> => String::from_str(c).unwrap(),
+    <c:"^"> => String::from_str(c).unwrap(),
+    <c:"_"> => String::from_str(c).unwrap(),
+    <c:"`"> => String::from_str(c).unwrap(),
+    <c:TokLowercaseLetter> => c,
+    <c:"{"> => String::from_str(c).unwrap(),
+    <c:"|"> => String::from_str(c).unwrap(),
+    <c:"}"> => String::from_str(c).unwrap(),
+    <c:"~"> => String::from_str(c).unwrap(),
+
+
+    <c:"\t"> => String::from_str(c).unwrap(),
+    <c:"\r"> => String::from_str(c).unwrap(),
+    <c:"\n"> => String::from_str(c).unwrap(), //0x7E
+};
+
+
+
+
+pub TokLowercaseLetter: String = {
     <c:"a"> => String::from_str(c).unwrap(),
     <c:"b"> => String::from_str(c).unwrap(),
     <c:"c"> => String::from_str(c).unwrap(),
@@ -179,23 +201,33 @@ pub TokStringChar:String = {
     <c:"x"> => String::from_str(c).unwrap(),
     <c:"y"> => String::from_str(c).unwrap(),
     <c:"z"> => String::from_str(c).unwrap(),
+};
 
-    <c:"/"> => String::from_str(c).unwrap(),
-    <c:"_"> => String::from_str(c).unwrap(),
-    // // some block char "\s"
-    <c:" "> => String::from_str(c).unwrap(),
-    <c:"\t"> => String::from_str(c).unwrap(),
-    // // special char
-    <c:"-"> => String::from_str(c).unwrap(),
-    <c:"^"> => String::from_str(c).unwrap(),
-    <c:"$"> => String::from_str(c).unwrap(),
-    <c:"("> => String::from_str(c).unwrap(),
-    <c:")"> => String::from_str(c).unwrap(),
-    <c:"*"> => String::from_str(c).unwrap(),
-    <c:"+"> => String::from_str(c).unwrap(),
-    <c:"?"> => String::from_str(c).unwrap(),
-    <c:"."> => String::from_str(c).unwrap(),
-    // <c:"["> => String::from_str(c).unwrap(),
-    // <c:"{"> => String::from_str(c).unwrap(),
-    <c:"|"> => String::from_str(c).unwrap(),
+pub TokUppercaseLetter: String = {
+    <c:"A"> => String::from_str(c).unwrap(),
+    <c:"B"> => String::from_str(c).unwrap(),
+    <c:"C"> => String::from_str(c).unwrap(),
+    <c:"D"> => String::from_str(c).unwrap(),
+    <c:"E"> => String::from_str(c).unwrap(),
+    <c:"F"> => String::from_str(c).unwrap(),
+    <c:"G"> => String::from_str(c).unwrap(),
+    <c:"H"> => String::from_str(c).unwrap(),
+    <c:"I"> => String::from_str(c).unwrap(),
+    <c:"J"> => String::from_str(c).unwrap(),
+    <c:"K"> => String::from_str(c).unwrap(),
+    <c:"L"> => String::from_str(c).unwrap(),
+    <c:"M"> => String::from_str(c).unwrap(),
+    <c:"N"> => String::from_str(c).unwrap(),
+    <c:"O"> => String::from_str(c).unwrap(),
+    <c:"P"> => String::from_str(c).unwrap(),
+    <c:"Q"> => String::from_str(c).unwrap(),
+    <c:"R"> => String::from_str(c).unwrap(),
+    <c:"S"> => String::from_str(c).unwrap(),
+    <c:"T"> => String::from_str(c).unwrap(),
+    <c:"U"> => String::from_str(c).unwrap(),
+    <c:"V"> => String::from_str(c).unwrap(),
+    <c:"W"> => String::from_str(c).unwrap(),
+    <c:"X"> => String::from_str(c).unwrap(),
+    <c:"Y"> => String::from_str(c).unwrap(),
+    <c:"Z"> => String::from_str(c).unwrap(),
 };

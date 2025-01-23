@@ -77,14 +77,18 @@ impl Gdbmi {
             };
             let mut actions = vec![];
             out_line.into_iter().for_each(|line| {
-                if let std::result::Result::Ok(a) =
-                    miout::TokOutOfBandRecordParser::new().parse(line.as_str())
-                {
-                    if let Some(show) = show_file(&a) {
-                        actions.push(Action::ShowFile(show));
+                match miout::TokOutOfBandRecordParser::new().parse(line.as_str()) {
+                    std::result::Result::Ok(a) => {
+                        if let Some(show) = show_file(&a) {
+                            actions.push(Action::ShowFile(show));
+                        }
+                    }
+                    std::result::Result::Err(e) => {
+                        error!("unknow read gdb mi line {} {:?} ",&e, &line);
                     }
                 }
-                actions.push(Action::Out(line));
+                // actions.push(Action::Out(line));
+                info!("gdb mi read {:?}", &line);
             });
             actions.into_iter().for_each(|action| {
                 if send.send(action::Action::Gdbmi(action)).is_err() {

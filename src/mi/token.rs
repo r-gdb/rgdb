@@ -137,6 +137,68 @@ mod tests {
         println!("s:{:?} {} {:?}", &s, s.len(), &a);
         assert!(a.unwrap() == String::from("3asdfwerasdf"));
     }
+
+    #[test]
+    fn f_c_string_1() {
+        let s = r###""\"3asdfwerasdf""###;
+        let a = miout::TokCStringParser::new().parse(s);
+        println!("s:{:?} {} {:?}", &s, s.len(), &a);
+        assert!(a.unwrap() == String::from("\\\"3asdfwerasdf"));
+    }
+
+    #[test]
+    fn f_c_string_2() {
+        let s: &str = r###""3asdfwe\\rasdf""###;
+        let a = miout::TokCStringParser::new().parse(s);
+        println!("s:{:?} {} {:?}", &s, s.len(), &a);
+        assert!(a.unwrap() == String::from("3asdfwe\\\\rasdf"));
+    }
+
+    #[test]
+    fn f_c_string_3() {
+        let s = r###""[]]""###;
+        let a = miout::TokCStringParser::new().parse(s);
+        println!("s:{:?} {} {:?}", &s, s.len(), &a);
+        assert!(a.unwrap() == String::from("[]]"));
+    }
+
+    #[test]
+    fn f_c_string_4() {
+        let s = r###""{""###;
+        let a = miout::TokCStringParser::new().parse(s);
+        println!("s:{:?} {} {:?}", &s, s.len(), &a);
+        assert!(a.unwrap() == String::from("{"));
+    }
+    #[test]
+    fn f_c_string_5() {
+        let s = r###""aaaa,""###;
+        let a = miout::TokCStringParser::new().parse(s);
+        println!("s:{:?} {} {:?}", &s, s.len(), &a);
+        assert!(a.unwrap() == String::from("aaaa,"));
+    }
+    #[test]
+    fn f_c_string_6() {
+        let s = r###""aaa=a""###;
+        let a = miout::TokCStringParser::new().parse(s);
+        println!("s:{:?} {} {:?}", &s, s.len(), &a);
+        assert!(a.unwrap() == String::from("aaa=a"));
+    }
+
+    #[test]
+    fn f_c_string_7() {
+        let s = r###""~`!@#$%^&*()_-+=<,.>/?:;'|{[}]""###;
+        let a = miout::TokCStringParser::new().parse(s);
+        println!("s:{:?} {} {:?}", &s, s.len(), &a);
+        assert!(a.unwrap() == String::from(r###"~`!@#$%^&*()_-+=<,.>/?:;'|{[}]"###));
+    }
+
+    // #[test]
+    // fn f_c_string_8() {
+    //     let s = r###""中文""###;
+    //     let a = miout::TokCStringParser::new().parse(s);
+    //     println!("s:{:?} {} {:?}", &s, s.len(), &a);
+    //     assert!(a.unwrap() == String::from(r###"中文"###));
+    // }
     #[test]
     fn f_tok_value_const() {
         let a = miout::TokValueParser::new().parse("\"/lib64/libexpat.so.1\"");
@@ -315,8 +377,28 @@ mod tests {
                 ))
         );
     }
-    #[test]
 
+    #[test]
+    fn f_to_k_async_output_type_1() {
+        let a = miout::TokOutOfBandRecordParser::new().parse(r##"=stopped,arch="i386:x86-64""##);
+        println!("{:?}", &a);
+        assert!(
+            a.unwrap()
+                == OutOfBandRecordType::AsyncRecord(AsyncRecordType::NotifyAsyncOutput(
+                    NotifyAsyncOutputType {
+                        async_output: AsyncOutputType {
+                            async_class: AsyncClassType::Stopped,
+                            resaults: vec![ResultType {
+                                variable: "arch".to_string(),
+                                value: ValueType::ConstType("i386:x86-64".to_string()),
+                            },],
+                        }
+                    }
+                ))
+        );
+    }
+
+    #[test]
     fn f_tok_exec_async_output_type() {
         let a = miout::TokOutOfBandRecordParser::new().parse(r##"*running,thread-id="1""##);
         println!("{:?}", &a);

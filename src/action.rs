@@ -3,6 +3,7 @@ use strum::Display;
 
 use crate::components::gdbmi;
 use crate::components::gdbtty;
+use crate::components::code;
 
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
 pub enum Action {
@@ -19,4 +20,5 @@ pub enum Action {
     Down,
     Gdbtty(gdbtty::Action),
     Gdbmi(gdbmi::Action),
+    Code(code::Action),
 }
