@@ -400,7 +400,7 @@ mod tests {
     }
     #[test]
     fn f_to_k_async_output_type_2() {
-        let a = miout::TokOutOfBandRecordParser::new().parse("=thread-selected,id=\"1\",frame={level=\"1\",addr=\"0x000000000020198c\",func=\"main\",args=[],file=\"args.c\",fullname=\"/remote/vcs_source02/lisimon/code/c++/args.c\",line=\"7\",arch=\"i386:x86-64\"}\n");
+        let a = miout::TokOutOfBandRecordParser::new().parse("=thread-selected,id=\"1\",frame={level=\"1\",addr=\"0x000000000020198c\",func=\"main\",args=[],file=\"args.c\",fullname=\"/remote/x/x/code/c++/args.c\",line=\"7\",arch=\"i386:x86-64\"}\n");
         println!("{:?}", &a);
         assert!(
             a.unwrap()
@@ -441,7 +441,7 @@ mod tests {
                                         ResultType {
                                             variable: "fullname".to_string(),
                                             value: ValueType::ConstType(
-                                                "/remote/vcs_source02/lisimon/code/c++/args.c"
+                                                "/remote/x/x/code/c++/args.c"
                                                     .to_string()
                                             ),
                                         },
