@@ -194,41 +194,52 @@ impl Component for Gdbmi {
 }
 
 fn show_file(a: &OutOfBandRecordType) -> Option<(String, u64)> {
-    let mut file = "".to_string();
-    let mut line = 0 as u64;
-    if let OutOfBandRecordType::AsyncRecord(AsyncRecordType::ExecAsyncOutput(a)) = a {
-        if a.async_output.async_class == AsyncClassType::Stopped {
-            a.async_output.resaults.iter().for_each(
-                |ResultType { variable, value }| match variable.as_str() {
-                    "frame" => {
-                        if let ValueType::TupleType(TupleType::Results(rs)) = value {
-                            rs.iter().for_each(|r| match r.variable.as_str() {
-                                "fullname" => {
-                                    if let ValueType::ConstType(f) = &r.value {
-                                        file = f.clone()
-                                    }
-                                }
-                                "line" => {
-                                    if let ValueType::ConstType(l) = &r.value {
-                                        if let std::result::Result::Ok(l) = l.parse::<u64>() {
-                                            line = l
-                                        }
-                                    }
-                                }
-                                _ => {}
-                            });
+    let get_from_frame = |r: &ResultType| -> Option<(String, u64)> {
+        let mut file = "".to_string();
+        let mut line = 0 as u64;
+        match r.variable.as_str() {
+            "frame" => {
+                if let ValueType::TupleType(TupleType::Results(rs)) = &r.value {
+                    rs.iter().for_each(|r| match r.variable.as_str() {
+                        "fullname" => {
+                            if let ValueType::ConstType(f) = &r.value {
+                                file = f.clone()
+                            }
                         }
-                    }
-                    _ => {}
-                },
-            );
-        }
-    }
-    let ret = if file != "" && line != 0 {
-        Some((file, line))
-    } else {
-        None
+                        "line" => {
+                            if let ValueType::ConstType(l) = &r.value {
+                                if let std::result::Result::Ok(l) = l.parse::<u64>() {
+                                    line = l
+                                }
+                            }
+                        }
+                        _ => {}
+                    });
+                }
+            }
+            _ => {}
+        };
+        let ret = if file != "" && line != 0 {
+            Some((file, line))
+        } else {
+            None
+        };
+        ret
     };
+    let mut ret = None;
+    if let OutOfBandRecordType::AsyncRecord(AsyncRecordType::ExecAsyncOutput(a)) = a {
+        if a.async_output.async_class == AsyncClassType::Stopped
+            || a.async_output.async_class == AsyncClassType::ThreadSelected
+        {
+            a.async_output.resaults.iter().for_each(|r| {
+                get_from_frame(r).and_then(|a| {
+                    ret = Some(a);
+                    Some(())
+                });
+            });
+        }
+    };
+
     ret
 }
 
@@ -240,3 +251,12 @@ fn f_show_file() {
     println!("{:?} {:?}", &a, &b);
     assert!(b == Some(("/home/shizhilvren/c++/a.c".to_string(), 27 as u64)));
 }
+
+#[test]
+// fn f_show_file_2() {
+//     let a = miout::TokOutOfBandRecordParser::new()
+//         .parse("=thread-selected,id=\"1\",frame={level=\"1\",addr=\"0x000000000020198c\",func=\"main\",args=[],file=\"args.c\",fullname=\"/remote/x/x/code/c++/args.c\",line=\"7\",arch=\"i386:x86-64\"}\n");
+//     let b = show_file(&a.as_ref().unwrap());
+//     println!("{:?} {:?}", &a, &b);
+//     assert!(b == Some(("/remote/x/x/code/c++/args.c".to_string(), 7 as u64)));
+// }
