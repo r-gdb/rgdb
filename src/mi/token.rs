@@ -43,6 +43,7 @@ pub struct AsyncOutputType {
 pub enum AsyncClassType {
     Stopped,
     Running,
+    ThreadSelected,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -392,6 +393,69 @@ mod tests {
                                 variable: "arch".to_string(),
                                 value: ValueType::ConstType("i386:x86-64".to_string()),
                             },],
+                        }
+                    }
+                ))
+        );
+    }
+    #[test]
+    fn f_to_k_async_output_type_2() {
+        let a = miout::TokOutOfBandRecordParser::new().parse("=thread-selected,id=\"1\",frame={level=\"1\",addr=\"0x000000000020198c\",func=\"main\",args=[],file=\"args.c\",fullname=\"/remote/vcs_source02/lisimon/code/c++/args.c\",line=\"7\",arch=\"i386:x86-64\"}\n");
+        println!("{:?}", &a);
+        assert!(
+            a.unwrap()
+                == OutOfBandRecordType::AsyncRecord(AsyncRecordType::NotifyAsyncOutput(
+                    NotifyAsyncOutputType {
+                        async_output: AsyncOutputType {
+                            async_class: AsyncClassType::ThreadSelected,
+                            resaults: vec![
+                                ResultType {
+                                    variable: "id".to_string(),
+                                    value: ValueType::ConstType("1".to_string()),
+                                },
+                                ResultType {
+                                    variable: "frame".to_string(),
+                                    value: ValueType::TupleType(TupleType::Results(vec![
+                                        ResultType {
+                                            variable: "level".to_string(),
+                                            value: ValueType::ConstType("1".to_string()),
+                                        },
+                                        ResultType {
+                                            variable: "addr".to_string(),
+                                            value: ValueType::ConstType(
+                                                "0x000000000020198c".to_string()
+                                            ),
+                                        },
+                                        ResultType {
+                                            variable: "func".to_string(),
+                                            value: ValueType::ConstType("main".to_string()),
+                                        },
+                                        ResultType {
+                                            variable: "args".to_string(),
+                                            value: ValueType::ListType(ListType::None),
+                                        },
+                                        ResultType {
+                                            variable: "file".to_string(),
+                                            value: ValueType::ConstType("args.c".to_string()),
+                                        },
+                                        ResultType {
+                                            variable: "fullname".to_string(),
+                                            value: ValueType::ConstType(
+                                                "/remote/vcs_source02/lisimon/code/c++/args.c"
+                                                    .to_string()
+                                            ),
+                                        },
+                                        ResultType {
+                                            variable: "line".to_string(),
+                                            value: ValueType::ConstType("7".to_string()),
+                                        },
+                                        ResultType {
+                                            variable: "arch".to_string(),
+                                            value: ValueType::ConstType("i386:x86-64".to_string()),
+                                        },
+                                    ])),
+                                },
+                            ],
                         }
                     }
                 ))

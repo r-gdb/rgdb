@@ -42,9 +42,15 @@ pub TokRunning:AsyncClassType = {
     "r" "u" "n" "n" "i" "n" "g" =>AsyncClassType::Running,
 }
 
+pub TokThreadSelected:AsyncClassType = {
+    "t" "h" "r" "e" "a" "d" "-" "s" "e" "l" "e" "c" "t" "e" "d" =>AsyncClassType::ThreadSelected,
+}
+
+
 pub TokAsyncClass:AsyncClassType = {
     <s:TokStopped> => s,
     <s:TokRunning> => s,
+    <s:TokThreadSelected> => s,
 }
 
 pub TokValue:ValueType = {
