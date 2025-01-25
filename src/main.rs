@@ -1,8 +1,8 @@
+use crate::app::App;
 use clap::Parser;
 use cli::Cli;
 use color_eyre::Result;
 use lalrpop_util::lalrpop_mod;
-use crate::app::App;
 lalrpop_mod!(
     #[allow(clippy::ptr_arg)]
     #[allow(clippy::vec_box)]
@@ -16,9 +16,9 @@ mod components;
 mod config;
 mod errors;
 mod logging;
+mod mi;
 mod tool;
 mod tui;
-mod mi;
 
 // #[tokio::main(flavor = "current_thread")]
 // #[tokio::main(flavor = "multi_thread", worker_threads = 2)]

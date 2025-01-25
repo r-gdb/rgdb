@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use strum::Display;
 
+use crate::components::code;
 use crate::components::gdbmi;
 use crate::components::gdbtty;
-use crate::components::code;
 
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
 pub enum Action {

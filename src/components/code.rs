@@ -72,12 +72,12 @@ impl SrcFileData {
         self.lines.len()
     }
     pub fn get_lines_range(&self, start: usize, end: usize) -> (Vec<&String>, usize, usize) {
-        let n = self.lines.len();
+        let n = self.lines.len().saturating_add(1);
         let end = n.min(end);
         (
             self.lines
                 .iter()
-                .skip(start)
+                .skip(start.saturating_sub(1))
                 .take(end.saturating_sub(start))
                 .map(|s| s)
                 .collect(),
@@ -164,12 +164,18 @@ impl Code {
         self.vertical_scroll = self.vertical_scroll.saturating_sub(n);
     }
     fn legalization_scroll_range(&mut self, hight: usize, n: usize) -> (usize, usize) {
-        let up_half = hight.div_ceil(2);
-        let down_half = hight.div_euclid(2);
-        let start = up_half;
-        let end = n.saturating_sub(down_half);
+        let up_half = hight.div_euclid(2);
+        let down_half = hight.div_ceil(2);
+        let start = up_half.saturating_add(1);
+        let end = n.saturating_sub(down_half).saturating_add(1).max(start);
         self.vertical_scroll = self.vertical_scroll.max(start);
         self.vertical_scroll = self.vertical_scroll.min(end);
+        (start, end)
+    }
+    fn get_windows_show_file_range(&self, hight: usize) -> (usize, usize) {
+        let up_half = hight.div_euclid(2);
+        let start = self.vertical_scroll.saturating_sub(up_half);
+        let end = start.saturating_add(hight);
         (start, end)
     }
     fn draw_all(
@@ -186,78 +192,124 @@ impl Code {
         area_src: Rect,
         area_status: Rect,
     ) {
-        let up_len = area_src.height.div_ceil(2);
-        let down_len = area_src.height.div_ceil(2);
-
-        self.vertical_scroll = self.vertical_scroll.max(up_len as usize);
-        self.vertical_scroll = self
-            .vertical_scroll
-            .min(n.saturating_sub(down_len as usize));
-        // self.vertical_scroll_state = self.vertical_scroll_state.content_length(n);
-        // self.vertical_scroll_state = self
-        //     .vertical_scroll_state
-        //     .position(n - self.vertical_scroll);
-        let block_split = Block::new().borders(Borders::LEFT);
-
+        let line_id_start_0 = if start_line <= line_id {
+            Some(line_id.saturating_sub(start_line))
+        } else {
+            None
+        };
+        let mark_as_id = self.draw_src(frame, src, &line_id_start_0, area_src);
+        self.draw_id(frame, start_line, end_line, line_id, area_ids);
+        self.draw_split(frame, &line_id_start_0, mark_as_id, area_split);
+        self.draw_status(frame, n, file_name, area_status);
+    }
+    fn draw_src(
+        &mut self,
+        frame: &mut Frame,
+        src: Vec<String>,
+        line_id_start_0: &Option<usize>,
+        area_src: Rect,
+    ) -> bool {
+        let mut mark_as_id = true;
         let block_src = Block::new()
             .borders(Borders::RIGHT)
             .style(Style::default())
             // .title(title)
             .title_alignment(Alignment::Center);
-
-        let text_src = Text::from(
-            src.iter()
-                .map(|s| {
-                    Line::from(
-                        s.chars()
-                            .into_iter()
-                            .map(|c| Span::raw(c.to_string()))
-                            .collect::<Vec<_>>(),
+        let text_src = Text::from_iter(src.iter().enumerate().map(|(id, s)| {
+            let first_litter_id = match *line_id_start_0 == Some(id) {
+                true => s.chars().into_iter().enumerate().find(|(_, c)| *c != ' '),
+                false => None,
+            };
+            // debug!("line stop {} {:?}", id, first_litter_id);
+            let str_iter = s.chars().into_iter().map(|c| Span::raw(c.to_string()));
+            Line::from(match first_litter_id {
+                Some((0, _)) => str_iter.collect::<Vec<_>>(),
+                Some((1, _)) => str_iter.collect::<Vec<_>>(),
+                Some((n, _)) => {
+                    mark_as_id = false;
+                    std::iter::repeat_n(
+                        Span::raw('─'.to_string()).style(Style::default().light_green()),
+                        n.saturating_sub(2),
                     )
-                })
-                .collect::<Vec<_>>(),
-        );
+                    .chain(std::iter::repeat_n(
+                        Span::raw('>'.to_string()).style(Style::default().light_green()),
+                        1,
+                    ))
+                    .chain(str_iter.skip(n.saturating_sub(1)).collect::<Vec<_>>())
+                    .collect::<Vec<_>>()
+                }
+                _ => str_iter.collect::<Vec<_>>(),
+            })
+        }));
 
-        let ids: Vec<usize> = (start_line..end_line)
-            .into_iter()
-            .map(|i| (i + 1))
-            .collect::<Vec<_>>();
-        let text_ids = Text::from(
-            ids.iter()
-                .map(|s| {
-                    let line = Line::from(
-                        s.to_string()
-                            .chars()
-                            .into_iter()
-                            .map(|c| Span::raw(c.to_string()))
-                            .collect::<Vec<_>>(),
-                    );
-                    if *s == line_id as usize {
-                        line.style(Style::default().green())
-                    } else {
-                        line
-                    }
-                })
-                .collect::<Vec<_>>(),
-        );
-        let paragraph_id = Paragraph::new(text_ids).right_aligned();
         let paragraph_src = Paragraph::new(text_src);
-        let title = format!("{} cmd {}/{} ", &file_name, self.vertical_scroll, n);
-        let paragraph_status = Paragraph::new(title).fg(Color::Black).bg(Color::White);
 
-        frame.render_widget(paragraph_id, area_ids);
-        frame.render_widget(block_split, area_split);
         frame.render_widget(paragraph_src, area_src);
-        frame.render_widget(paragraph_status, area_status);
         frame.render_widget(block_src, area_src);
         let scrollbar =
             Scrollbar::new(ScrollbarOrientation::VerticalRight).symbols(scrollbar::VERTICAL);
         frame.render_stateful_widget(scrollbar, area_src, &mut self.vertical_scroll_state);
+        return mark_as_id;
+    }
+    fn draw_status(&mut self, frame: &mut Frame, n: usize, file_name: String, area_status: Rect) {
+        let title = format!("{} cmd {}/{} ", &file_name, self.vertical_scroll, n);
+        let paragraph_status = Paragraph::new(title).fg(Color::Black).bg(Color::White);
+        frame.render_widget(paragraph_status, area_status);
+    }
+    fn draw_id(
+        &mut self,
+        frame: &mut Frame,
+        start_line: usize,
+        end_line: usize,
+        line_id: usize,
+
+        area_ids: Rect,
+    ) {
+        let ids: Vec<usize> = (start_line..end_line.saturating_add(1))
+            .into_iter()
+            .collect::<Vec<_>>();
+        let text_ids = Text::from_iter(ids.iter().map(|s| {
+            let line = Line::from_iter(
+                s.to_string()
+                    .chars()
+                    .into_iter()
+                    .map(|c| Span::raw(c.to_string())),
+            );
+            if *s == line_id as usize {
+                line.style(Style::default().light_green())
+            } else {
+                line
+            }
+        }));
+
+        let paragraph_id = Paragraph::new(text_ids).right_aligned();
+        frame.render_widget(paragraph_id, area_ids);
+    }
+
+    fn draw_split(
+        &mut self,
+        frame: &mut Frame,
+        line_id_start_0: &Option<usize>,
+        mark_as_id: bool,
+        area_split: Rect,
+    ) {
+        let test_split = Text::from_iter(
+            std::iter::repeat_n(Span::raw("│ "), area_split.height as usize)
+                .enumerate()
+                .map(|(id, s)| match (*line_id_start_0 == Some(id), mark_as_id) {
+                    (true, true) => Span::raw("├>").style(Style::default().light_green()),
+                    (true, false) => Span::raw("├─").style(Style::default().light_green()),
+                    (false, _) => s,
+                })
+                .map(|s| Line::from(s)),
+        );
+        let paragraph_split = Paragraph::new(test_split);
+        frame.render_widget(paragraph_split, area_split);
     }
 }
 
 impl Component for Code {
-    fn init(&mut self, area: Size) -> Result<()> {
+    fn init(&mut self, _area: Size) -> Result<()> {
         Ok(())
     }
     fn register_action_handler(&mut self, tx: UnboundedSender<action::Action>) -> Result<()> {
@@ -348,9 +400,7 @@ impl Component for Code {
         let ans = self.get_need_show_file().and_then(|(file, line_id)| {
             let n = file.get_lines_len();
             let num_len = n.to_string().len() as u16;
-            let [area, _] = tool::get_layout(area);
-            let [area, area_status] =
-                Layout::vertical([Constraint::Percentage(100), Constraint::Min(1)]).areas(area);
+            let [area, area_status, _] = tool::get_layout(area);
             let [area_ids, area_split, area_src] = Layout::horizontal([
                 Constraint::Min(num_len),
                 Constraint::Min(2),
@@ -360,26 +410,19 @@ impl Component for Code {
             Some((n, area_ids, area_split, area_src, area_status))
         });
 
-        ans.map(|(n, area_ids, area_split, area_src, area_status)| {
-            (area_src.height.clone(), n.clone())
-        })
-        .map(|(height, n)| {
-            self.legalization_scroll_range(height as usize, n);
+        ans.map(|(n, _, _, area_src, _)| (area_src.height.clone(), n.clone()))
+            .map(|(height, n)| {
+                self.legalization_scroll_range(height as usize, n);
 
-            Some(())
-        });
+                Some(())
+            });
 
         let ans = if let (
             Some((n, area_ids, area_split, area_src, area_status)),
             Some((file, line_id)),
         ) = (ans, self.get_need_show_file())
         {
-            let up_len = area_src.height.div_ceil(2);
-            let start_line = self.vertical_scroll.saturating_sub(up_len as usize);
-            let end_line = self
-                .vertical_scroll
-                .saturating_add(area_src.height as usize)
-                .saturating_add(1);
+            let (start_line, end_line) = self.get_windows_show_file_range(area_src.height as usize);
             let (src, start_line, end_line) = file.get_lines_range(start_line, end_line);
             let src = src.iter().map(|s| s.to_string()).collect::<Vec<String>>();
             Some((
@@ -429,4 +472,100 @@ impl Component for Code {
         );
         Ok(())
     }
+}
+
+#[test]
+fn test_scroll_range() {
+    let mut code = Code::default();
+    let a = code.legalization_scroll_range(32, 64);
+    println! {"let {:?}",a};
+    assert!(a == (17 as usize, 49 as usize));
+}
+
+#[test]
+fn test_scroll_range_2() {
+    let mut code = Code::default();
+    let a = code.legalization_scroll_range(31, 64);
+    println! {"let {:?}",a};
+    assert!(a == (16 as usize, 49 as usize));
+}
+
+#[test]
+fn test_scroll_range_3() {
+    let mut code = Code::default();
+    let a = code.legalization_scroll_range(31, 2);
+    println! {"let {:?}",a};
+    assert!(a == (16 as usize, 16 as usize));
+}
+
+#[test]
+fn test_show_file_range() {
+    let mut code = Code::default();
+    code.vertical_scroll = 0;
+    code.legalization_scroll_range(32, 64);
+    let a = code.get_windows_show_file_range(32);
+    println! {"let {:?}",a};
+    assert!(a == (1 as usize, 33 as usize));
+}
+
+#[test]
+fn test_show_file_range_2() {
+    let mut code = Code::default();
+    code.vertical_scroll = 200;
+    code.legalization_scroll_range(32, 64);
+    let a = code.get_windows_show_file_range(32);
+    println! {"let {:?}",a};
+    assert!(a == (33 as usize, 65 as usize));
+}
+
+#[test]
+fn test_show_file_range_3() {
+    let mut code = Code::default();
+    code.vertical_scroll = 20;
+    code.legalization_scroll_range(32, 64);
+    let a = code.get_windows_show_file_range(32);
+    println! {"let {:?}",a};
+    assert!(a == (4 as usize, 36 as usize));
+}
+
+#[test]
+fn test_show_file_range_4() {
+    let mut code = Code::default();
+    code.vertical_scroll = 20;
+    code.legalization_scroll_range(31, 64);
+    let a = code.get_windows_show_file_range(31);
+    println! {"let {:?}",a};
+    assert!(a == (5 as usize, 36 as usize));
+}
+
+#[test]
+fn test_file_range_1() {
+    let mut file = SrcFileData::new("a".to_string());
+    (1..62).into_iter().for_each(|i| {
+        file.add_line(format!("{:?}\n", i));
+    });
+    file.set_read_done();
+    let (src, s, e) = file.get_lines_range(4 as usize, 36 as usize);
+    assert!(s == 4 as usize);
+    assert!(e == 36 as usize);
+    println!("file range{:?} {} {}", src, s, e);
+    (4..37).zip(src.iter()).for_each(|(i, s)| {
+        assert!(format!("{:?}\n", i) == **s);
+    });
+}
+
+#[test]
+fn test_file_range_2() {
+    let mut file = SrcFileData::new("a".to_string());
+    (1..62).into_iter().for_each(|i| {
+        file.add_line(format!("{:?}\n", i));
+    });
+    file.set_read_done();
+    let (src, s, e) = file.get_lines_range(50 as usize, 65 as usize);
+    println!("file range{:?} {} {}", src, s, e);
+    assert!(s == 50 as usize);
+    assert!(e == 62 as usize);
+    (50..62).zip(src.iter()).for_each(|(i, s)| {
+        assert!(format!("{:?}\n", i) == **s);
+    });
 }

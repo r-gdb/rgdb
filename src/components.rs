@@ -9,11 +9,11 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{action::Action, config::Config, tui::Event};
 
+pub mod code;
 pub mod fps;
 pub mod gdbmi;
 pub mod gdbtty;
 pub mod home;
-pub mod code;
 
 /// `Component` is a trait that represents a visual and interactive element of the user interface.
 ///
