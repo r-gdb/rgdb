@@ -193,13 +193,14 @@ mod tests {
         assert!(a.unwrap() == String::from(r###"~`!@#$%^&*()_-+=<,.>/?:;'|{[}]"###));
     }
 
-    // #[test]
-    // fn f_c_string_8() {
-    //     let s = r###""中文""###;
-    //     let a = miout::TokCStringParser::new().parse(s);
-    //     println!("s:{:?} {} {:?}", &s, s.len(), &a);
-    //     assert!(a.unwrap() == String::from(r###"中文"###));
-    // }
+    #[test]
+    #[ignore]
+    fn f_c_string_8() {
+        let s = r###""中文""###;
+        let a = miout::TokCStringParser::new().parse(s);
+        println!("s:{:?} {} {:?}", &s, s.len(), &a);
+        assert!(a.unwrap() == String::from(r###"中文"###));
+    }
     #[test]
     fn f_tok_value_const() {
         let a = miout::TokValueParser::new().parse("\"/lib64/libexpat.so.1\"");
@@ -441,8 +442,7 @@ mod tests {
                                         ResultType {
                                             variable: "fullname".to_string(),
                                             value: ValueType::ConstType(
-                                                "/remote/x/x/code/c++/args.c"
-                                                    .to_string()
+                                                "/remote/x/x/code/c++/args.c".to_string()
                                             ),
                                         },
                                         ResultType {

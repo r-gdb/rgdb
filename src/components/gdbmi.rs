@@ -227,18 +227,29 @@ fn show_file(a: &OutOfBandRecordType) -> Option<(String, u64)> {
         ret
     };
     let mut ret = None;
-    if let OutOfBandRecordType::AsyncRecord(AsyncRecordType::ExecAsyncOutput(a)) = a {
-        if a.async_output.async_class == AsyncClassType::Stopped
-            || a.async_output.async_class == AsyncClassType::ThreadSelected
-        {
-            a.async_output.resaults.iter().for_each(|r| {
-                get_from_frame(r).and_then(|a| {
-                    ret = Some(a);
-                    Some(())
+    let OutOfBandRecordType::AsyncRecord(a) = a;
+    match a {
+        AsyncRecordType::ExecAsyncOutput(a) => {
+            if a.async_output.async_class == AsyncClassType::Stopped {
+                a.async_output.resaults.iter().for_each(|r| {
+                    get_from_frame(r).and_then(|a| {
+                        ret = Some(a);
+                        Some(())
+                    });
                 });
-            });
+            }
         }
-    };
+        AsyncRecordType::NotifyAsyncOutput(a) => {
+            if a.async_output.async_class == AsyncClassType::ThreadSelected {
+                a.async_output.resaults.iter().for_each(|r| {
+                    get_from_frame(r).and_then(|a| {
+                        ret = Some(a);
+                        Some(())
+                    });
+                });
+            }
+        }
+    }
 
     ret
 }
@@ -253,10 +264,10 @@ fn f_show_file() {
 }
 
 #[test]
-// fn f_show_file_2() {
-//     let a = miout::TokOutOfBandRecordParser::new()
-//         .parse("=thread-selected,id=\"1\",frame={level=\"1\",addr=\"0x000000000020198c\",func=\"main\",args=[],file=\"args.c\",fullname=\"/remote/x/x/code/c++/args.c\",line=\"7\",arch=\"i386:x86-64\"}\n");
-//     let b = show_file(&a.as_ref().unwrap());
-//     println!("{:?} {:?}", &a, &b);
-//     assert!(b == Some(("/remote/x/x/code/c++/args.c".to_string(), 7 as u64)));
-// }
+fn f_show_file_2() {
+    let a = miout::TokOutOfBandRecordParser::new()
+        .parse("=thread-selected,id=\"1\",frame={level=\"1\",addr=\"0x000000000020198c\",func=\"main\",args=[],file=\"args.c\",fullname=\"/remote/x/x/code/c++/args.c\",line=\"7\",arch=\"i386:x86-64\"}\n");
+    let b = show_file(&a.as_ref().unwrap());
+    println!("{:?} {:?}", &a, &b);
+    assert!(b == Some(("/remote/x/x/code/c++/args.c".to_string(), 7 as u64)));
+}
