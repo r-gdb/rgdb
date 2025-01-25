@@ -7,7 +7,6 @@ use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::hash::Hash;
-use std::usize;
 use strum::Display;
 use symbols::scrollbar;
 use tokio::fs::File;
@@ -43,9 +42,6 @@ impl PartialEq for SrcFileData {
     fn eq(&self, other: &Self) -> bool {
         self.file_name == other.file_name
     }
-    fn ne(&self, other: &Self) -> bool {
-        self.file_name != other.file_name
-    }
 }
 
 impl SrcFileData {
@@ -65,9 +61,6 @@ impl SrcFileData {
     pub fn set_read_done(&mut self) {
         self.read_done = true;
     }
-    pub fn get_lines(&self) -> &Vec<String> {
-        &self.lines
-    }
     pub fn get_lines_len(&self) -> usize {
         self.lines.len()
     }
@@ -79,7 +72,6 @@ impl SrcFileData {
                 .iter()
                 .skip(start.saturating_sub(1))
                 .take(end.saturating_sub(start))
-                .map(|s| s)
                 .collect(),
             start,
             end,
@@ -217,11 +209,11 @@ impl Code {
             .title_alignment(Alignment::Center);
         let text_src = Text::from_iter(src.iter().enumerate().map(|(id, s)| {
             let first_litter_id = match *line_id_start_0 == Some(id) {
-                true => s.chars().into_iter().enumerate().find(|(_, c)| *c != ' '),
+                true => s.chars().enumerate().find(|(_, c)| *c != ' '),
                 false => None,
             };
             // debug!("line stop {} {:?}", id, first_litter_id);
-            let str_iter = s.chars().into_iter().map(|c| Span::raw(c.to_string()));
+            let str_iter = s.chars().map(|c| Span::raw(c.to_string()));
             Line::from(match first_litter_id {
                 Some((0, _)) => str_iter.collect::<Vec<_>>(),
                 Some((1, _)) => str_iter.collect::<Vec<_>>(),
@@ -249,7 +241,7 @@ impl Code {
         let scrollbar =
             Scrollbar::new(ScrollbarOrientation::VerticalRight).symbols(scrollbar::VERTICAL);
         frame.render_stateful_widget(scrollbar, area_src, &mut self.vertical_scroll_state);
-        return mark_as_id;
+        mark_as_id
     }
     fn draw_status(&mut self, frame: &mut Frame, n: usize, file_name: String, area_status: Rect) {
         let title = format!("{} cmd {}/{} ", &file_name, self.vertical_scroll, n);
@@ -265,17 +257,10 @@ impl Code {
 
         area_ids: Rect,
     ) {
-        let ids: Vec<usize> = (start_line..end_line.saturating_add(1))
-            .into_iter()
-            .collect::<Vec<_>>();
+        let ids: Vec<usize> = (start_line..end_line.saturating_add(1)).collect::<Vec<_>>();
         let text_ids = Text::from_iter(ids.iter().map(|s| {
-            let line = Line::from_iter(
-                s.to_string()
-                    .chars()
-                    .into_iter()
-                    .map(|c| Span::raw(c.to_string())),
-            );
-            if *s == line_id as usize {
+            let line = Line::from_iter(s.to_string().chars().map(|c| Span::raw(c.to_string())));
+            if *s == line_id {
                 line.style(Style::default().light_green())
             } else {
                 line
@@ -294,14 +279,13 @@ impl Code {
         area_split: Rect,
     ) {
         let test_split = Text::from_iter(
-            std::iter::repeat_n(Span::raw("│ "), area_split.height as usize)
+            std::iter::repeat_n(Line::from("│ "), area_split.height as usize)
                 .enumerate()
                 .map(|(id, s)| match (*line_id_start_0 == Some(id), mark_as_id) {
-                    (true, true) => Span::raw("├>").style(Style::default().light_green()),
-                    (true, false) => Span::raw("├─").style(Style::default().light_green()),
+                    (true, true) => Line::from("├>").style(Style::default().light_green()),
+                    (true, false) => Line::from("├─").style(Style::default().light_green()),
                     (false, _) => s,
-                })
-                .map(|s| Line::from(s)),
+                }),
         );
         let paragraph_split = Paragraph::new(test_split);
         frame.render_widget(paragraph_split, area_split);
@@ -326,12 +310,11 @@ impl Component for Code {
         mouse: crossterm::event::MouseEvent,
     ) -> Result<Option<action::Action>> {
         // debug!("gen mouseEvent {:?}", &mouse);
-        let ret = match mouse.kind {
+        match mouse.kind {
             crossterm::event::MouseEventKind::ScrollUp => Ok(Some(action::Action::Up)),
             crossterm::event::MouseEventKind::ScrollDown => Ok(Some(action::Action::Down)),
             _ => Ok(None),
-        };
-        ret
+        }
     }
     fn update(&mut self, action: action::Action) -> Result<Option<action::Action>> {
         match action {
@@ -355,10 +338,10 @@ impl Component for Code {
                         if let Some(send) = self.command_tx.clone() {
                             self.files_set.insert(SrcFileData::new(file.clone()));
                             let read_therad = Self::read_file(file.clone(), send.clone());
-                            Some(tokio::spawn(async {
+                            tokio::spawn(async {
                                 read_therad.await;
-                            }));
-                            debug!("read file {} start", file)
+                            });
+                            debug!("read file {} start", file);
                         } else {
                             let msg = format!("read file {} thread not start", &file);
                             error!("{}", &msg);
@@ -397,7 +380,7 @@ impl Component for Code {
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
-        let ans = self.get_need_show_file().and_then(|(file, line_id)| {
+        let ans = self.get_need_show_file().map(|(file, _line_id)| {
             let n = file.get_lines_len();
             let num_len = n.to_string().len() as u16;
             let [area, area_status, _] = tool::get_layout(area);
@@ -407,10 +390,10 @@ impl Component for Code {
                 Constraint::Percentage(100),
             ])
             .areas(area);
-            Some((n, area_ids, area_split, area_src, area_status))
+            (n, area_ids, area_split, area_src, area_status)
         });
 
-        ans.map(|(n, _, _, area_src, _)| (area_src.height.clone(), n.clone()))
+        ans.map(|(n, _, _, area_src, _)| (area_src.height, n))
             .map(|(height, n)| {
                 self.legalization_scroll_range(height as usize, n);
 
@@ -441,35 +424,33 @@ impl Component for Code {
             None
         };
 
-        ans.and_then(
-            |(
+        if let Some((
+            src,
+            start_line,
+            end_line,
+            line_id,
+            n,
+            file_name,
+            area_ids,
+            area_split,
+            area_src,
+            area_status,
+        )) = ans
+        {
+            self.draw_all(
+                frame,
                 src,
                 start_line,
                 end_line,
-                line_id,
+                line_id as usize,
                 n,
                 file_name,
                 area_ids,
                 area_split,
                 area_src,
                 area_status,
-            )| {
-                self.draw_all(
-                    frame,
-                    src,
-                    start_line,
-                    end_line,
-                    line_id as usize,
-                    n,
-                    file_name,
-                    area_ids,
-                    area_split,
-                    area_src,
-                    area_status,
-                );
-                Some(())
-            },
-        );
+            );
+        };
         Ok(())
     }
 }
@@ -479,75 +460,75 @@ fn test_scroll_range() {
     let mut code = Code::default();
     let a = code.legalization_scroll_range(32, 64);
     println! {"let {:?}",a};
-    assert!(a == (17 as usize, 49 as usize));
+    assert!(a == (17_usize, 49_usize));
 }
 
 #[test]
 fn test_scroll_range_2() {
-    let mut code = Code::default();
+    let mut code = Code::new();
     let a = code.legalization_scroll_range(31, 64);
     println! {"let {:?}",a};
-    assert!(a == (16 as usize, 49 as usize));
+    assert!(a == (16_usize, 49_usize));
 }
 
 #[test]
 fn test_scroll_range_3() {
-    let mut code = Code::default();
+    let mut code = Code::new();
     let a = code.legalization_scroll_range(31, 2);
     println! {"let {:?}",a};
-    assert!(a == (16 as usize, 16 as usize));
+    assert!(a == (16_usize, 16_usize));
 }
 
 #[test]
 fn test_show_file_range() {
-    let mut code = Code::default();
+    let mut code = Code::new();
     code.vertical_scroll = 0;
     code.legalization_scroll_range(32, 64);
     let a = code.get_windows_show_file_range(32);
     println! {"let {:?}",a};
-    assert!(a == (1 as usize, 33 as usize));
+    assert!(a == (1_usize, 33_usize));
 }
 
 #[test]
 fn test_show_file_range_2() {
-    let mut code = Code::default();
+    let mut code = Code::new();
     code.vertical_scroll = 200;
     code.legalization_scroll_range(32, 64);
     let a = code.get_windows_show_file_range(32);
     println! {"let {:?}",a};
-    assert!(a == (33 as usize, 65 as usize));
+    assert!(a == (33_usize, 65_usize));
 }
 
 #[test]
 fn test_show_file_range_3() {
-    let mut code = Code::default();
+    let mut code = Code::new();
     code.vertical_scroll = 20;
     code.legalization_scroll_range(32, 64);
     let a = code.get_windows_show_file_range(32);
     println! {"let {:?}",a};
-    assert!(a == (4 as usize, 36 as usize));
+    assert!(a == (4_usize, 36_usize));
 }
 
 #[test]
 fn test_show_file_range_4() {
-    let mut code = Code::default();
+    let mut code = Code::new();
     code.vertical_scroll = 20;
     code.legalization_scroll_range(31, 64);
     let a = code.get_windows_show_file_range(31);
     println! {"let {:?}",a};
-    assert!(a == (5 as usize, 36 as usize));
+    assert!(a == (5_usize, 36_usize));
 }
 
 #[test]
 fn test_file_range_1() {
     let mut file = SrcFileData::new("a".to_string());
-    (1..62).into_iter().for_each(|i| {
+    (1..62).for_each(|i| {
         file.add_line(format!("{:?}\n", i));
     });
     file.set_read_done();
-    let (src, s, e) = file.get_lines_range(4 as usize, 36 as usize);
-    assert!(s == 4 as usize);
-    assert!(e == 36 as usize);
+    let (src, s, e) = file.get_lines_range(4_usize, 36_usize);
+    assert!(s == 4_usize);
+    assert!(e == 36_usize);
     println!("file range{:?} {} {}", src, s, e);
     (4..37).zip(src.iter()).for_each(|(i, s)| {
         assert!(format!("{:?}\n", i) == **s);
@@ -557,14 +538,14 @@ fn test_file_range_1() {
 #[test]
 fn test_file_range_2() {
     let mut file = SrcFileData::new("a".to_string());
-    (1..62).into_iter().for_each(|i| {
+    (1..62).for_each(|i| {
         file.add_line(format!("{:?}\n", i));
     });
     file.set_read_done();
-    let (src, s, e) = file.get_lines_range(50 as usize, 65 as usize);
+    let (src, s, e) = file.get_lines_range(50_usize, 65_usize);
     println!("file range{:?} {} {}", src, s, e);
-    assert!(s == 50 as usize);
-    assert!(e == 62 as usize);
+    assert!(s == 50_usize);
+    assert!(e == 62_usize);
     (50..62).zip(src.iter()).for_each(|(i, s)| {
         assert!(format!("{:?}\n", i) == **s);
     });

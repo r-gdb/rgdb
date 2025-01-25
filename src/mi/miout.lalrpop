@@ -54,31 +54,31 @@ pub TokAsyncClass:AsyncClassType = {
 }
 
 pub TokValue:ValueType = {
-    <c:TokConst> => ValueType::ConstType(c),
-    <t:TokTuple> => ValueType::TupleType(t),
-    <l:TokList> => ValueType::ListType(l),
+    <c:TokConst> => ValueType::Const(c),
+    <t:TokTuple> => ValueType::Tuple(t),
+    <l:TokList> => ValueType::List(l),
 };
 
-pub TokTuple:TupleType = {
-    "{" "}" => TupleType::None,
+pub TokTuple:Tuple = {
+    "{" "}" => Tuple::None,
     "{" <v:(<TokResult> <TokComma>)* > <e:TokResult> "}" => {
         let mut v = v.into_iter().map(|(r, c)| r).collect::<Vec<ResultType>>();
         v.push(e);
-        TupleType::Results(v)
+        Tuple::Results(v)
     },
 };
 
-pub TokList:ListType = {
-    "[" "]" => ListType::None,
+pub TokList:List = {
+    "[" "]" => List::None,
     "[" <v:(<TokResult> <TokComma>)* > <e:TokResult> "]" => {
         let mut v = v.into_iter().map(|(r, c)| r).collect::<Vec<ResultType>>();
         v.push(e);
-        ListType::ResultList(v)
+        List::ResultList(v)
     },
     "[" <v:(<TokValue> <TokComma>)* > <e:TokValue> "]" => {
         let mut v = v.into_iter().map(|(r, c)| r).collect::<Vec<ValueType>>();
         v.push(e);
-        ListType::ValueList(v)
+        List::ValueList(v)
     },
 };
 

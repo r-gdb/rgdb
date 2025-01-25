@@ -54,9 +54,9 @@ pub enum NewLineType {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ValueType {
-    ConstType(String),
-    TupleType(TupleType),
-    ListType(ListType),
+    Const(String),
+    Tuple(Tuple),
+    List(List),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -67,33 +67,33 @@ pub struct ResultType {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 
-pub enum TupleType {
+pub enum Tuple {
     None,
     Results(Vec<ResultType>),
 }
 
 #[derive(Debug, PartialEq, Clone, Eq)]
-pub enum ListType {
+pub enum List {
     None,
     ResultList(Vec<ResultType>),
     ValueList(Vec<ValueType>),
 }
 
-pub fn apply_string_escapes(s: &str) -> String {
-    s.chars()
-        .map(|c| match c {
-            '\\' => vec!['\\', '\\'],
-            '\"' => vec!['\\', '\"'],
-            _ => vec![c],
-        })
-        .flatten()
-        .collect()
-}
+// pub fn apply_string_escapes(s: &str) -> String {
+//     s.chars()
+//         .map(|c| match c {
+//             '\\' => vec!['\\', '\\'],
+//             '\"' => vec!['\\', '\"'],
+//             _ => vec![c],
+//         })
+//         .flatten()
+//         .collect()
+// }
+
 pub fn vec_string_to_string(s: Vec<String>) -> String {
     s.iter()
-        .map(|s| s.bytes())
-        .flatten()
-        .map(|c| char::from(c))
+        .flat_map(|s| s.bytes())
+        .map(char::from)
         .collect::<String>()
 }
 
@@ -105,14 +105,14 @@ mod tests {
         let s = r#"c"#;
         let a = miout::TokStringCharParser::new().parse(s);
         println!("s:{:?} {} {:?}", &s, s.len(), &a);
-        assert!(a.unwrap() == String::from("c"));
+        assert!(a.unwrap() == *"c");
     }
     #[test]
     fn f_string_char_2() {
         let s = r#"3"#;
         let a = miout::TokStringCharParser::new().parse(s);
         println!("s:{:?} {} {:?}", &s, s.len(), &a);
-        assert!(a.unwrap() == String::from("3"));
+        assert!(a.unwrap() == *"3");
     }
 
     #[test]
@@ -120,7 +120,7 @@ mod tests {
         let s = r#"3asdfwerasdf"#;
         let a = miout::TokStringParser::new().parse(s);
         println!("s:{:?} {} {:?}", &s, s.len(), &a);
-        assert!(a.unwrap() == String::from(s));
+        assert!(a.unwrap() == *s);
     }
 
     #[test]
@@ -136,7 +136,7 @@ mod tests {
         let s = r##""3asdfwerasdf""##;
         let a = miout::TokCStringParser::new().parse(s);
         println!("s:{:?} {} {:?}", &s, s.len(), &a);
-        assert!(a.unwrap() == String::from("3asdfwerasdf"));
+        assert!(a.unwrap() == *"3asdfwerasdf");
     }
 
     #[test]
@@ -144,7 +144,7 @@ mod tests {
         let s = r###""\"3asdfwerasdf""###;
         let a = miout::TokCStringParser::new().parse(s);
         println!("s:{:?} {} {:?}", &s, s.len(), &a);
-        assert!(a.unwrap() == String::from("\\\"3asdfwerasdf"));
+        assert!(a.unwrap() == *"\\\"3asdfwerasdf");
     }
 
     #[test]
@@ -152,7 +152,7 @@ mod tests {
         let s: &str = r###""3asdfwe\\rasdf""###;
         let a = miout::TokCStringParser::new().parse(s);
         println!("s:{:?} {} {:?}", &s, s.len(), &a);
-        assert!(a.unwrap() == String::from("3asdfwe\\\\rasdf"));
+        assert!(a.unwrap() == *"3asdfwe\\\\rasdf");
     }
 
     #[test]
@@ -160,7 +160,7 @@ mod tests {
         let s = r###""[]]""###;
         let a = miout::TokCStringParser::new().parse(s);
         println!("s:{:?} {} {:?}", &s, s.len(), &a);
-        assert!(a.unwrap() == String::from("[]]"));
+        assert!(a.unwrap() == *"[]]");
     }
 
     #[test]
@@ -168,21 +168,21 @@ mod tests {
         let s = r###""{""###;
         let a = miout::TokCStringParser::new().parse(s);
         println!("s:{:?} {} {:?}", &s, s.len(), &a);
-        assert!(a.unwrap() == String::from("{"));
+        assert!(a.unwrap() == *"{");
     }
     #[test]
     fn f_c_string_5() {
         let s = r###""aaaa,""###;
         let a = miout::TokCStringParser::new().parse(s);
         println!("s:{:?} {} {:?}", &s, s.len(), &a);
-        assert!(a.unwrap() == String::from("aaaa,"));
+        assert!(a.unwrap() == *"aaaa,");
     }
     #[test]
     fn f_c_string_6() {
         let s = r###""aaa=a""###;
         let a = miout::TokCStringParser::new().parse(s);
         println!("s:{:?} {} {:?}", &s, s.len(), &a);
-        assert!(a.unwrap() == String::from("aaa=a"));
+        assert!(a.unwrap() == *"aaa=a");
     }
 
     #[test]
@@ -190,7 +190,7 @@ mod tests {
         let s = r###""~`!@#$%^&*()_-+=<,.>/?:;'|{[}]""###;
         let a = miout::TokCStringParser::new().parse(s);
         println!("s:{:?} {} {:?}", &s, s.len(), &a);
-        assert!(a.unwrap() == String::from(r###"~`!@#$%^&*()_-+=<,.>/?:;'|{[}]"###));
+        assert!(a.unwrap() == *r###"~`!@#$%^&*()_-+=<,.>/?:;'|{[}]"###);
     }
 
     #[test]
@@ -199,24 +199,24 @@ mod tests {
         let s = r###""中文""###;
         let a = miout::TokCStringParser::new().parse(s);
         println!("s:{:?} {} {:?}", &s, s.len(), &a);
-        assert!(a.unwrap() == String::from(r###"中文"###));
+        assert!(a.unwrap() == *r###"中文"###);
     }
     #[test]
     fn f_tok_value_const() {
         let a = miout::TokValueParser::new().parse("\"/lib64/libexpat.so.1\"");
-        assert!(a.unwrap() == ValueType::ConstType("/lib64/libexpat.so.1".to_string()));
+        assert!(a.unwrap() == ValueType::Const("/lib64/libexpat.so.1".to_string()));
     }
 
     #[test]
     fn f_tok_list_empty() {
         let a = miout::TokListParser::new().parse("[]");
-        assert!(a.unwrap() == ListType::None);
+        assert!(a.unwrap() == List::None);
     }
 
     #[test]
     fn f_tuple_type_empty() {
         let a = miout::TokTupleParser::new().parse("{}");
-        assert!(a.unwrap() == TupleType::None);
+        assert!(a.unwrap() == Tuple::None);
     }
     #[test]
 
@@ -226,7 +226,7 @@ mod tests {
             a.unwrap()
                 == ResultType {
                     variable: "result".to_string(),
-                    value: ValueType::TupleType(TupleType::None)
+                    value: ValueType::Tuple(Tuple::None)
                 }
         );
     }
@@ -238,7 +238,7 @@ mod tests {
             a.unwrap()
                 == ResultType {
                     variable: "res-ult".to_string(),
-                    value: ValueType::ListType(ListType::None)
+                    value: ValueType::List(List::None)
                 }
         );
     }
@@ -249,18 +249,18 @@ mod tests {
             miout::TokTupleParser::new().parse(r##"{number="1",type="breakpoint",disp="del"}"##);
         assert!(
             a.unwrap()
-                == TupleType::Results(vec![
+                == Tuple::Results(vec![
                     ResultType {
                         variable: "number".to_string(),
-                        value: ValueType::ConstType("1".to_string())
+                        value: ValueType::Const("1".to_string())
                     },
                     ResultType {
                         variable: "type".to_string(),
-                        value: ValueType::ConstType("breakpoint".to_string())
+                        value: ValueType::Const("breakpoint".to_string())
                     },
                     ResultType {
                         variable: "disp".to_string(),
-                        value: ValueType::ConstType("del".to_string())
+                        value: ValueType::Const("del".to_string())
                     }
                 ])
         );
@@ -270,18 +270,18 @@ mod tests {
         let a = miout::TokListParser::new().parse(r##"[number="1",type="breakpoint",disp="del"]"##);
         assert!(
             a.unwrap()
-                == ListType::ResultList(vec![
+                == List::ResultList(vec![
                     ResultType {
                         variable: "number".to_string(),
-                        value: ValueType::ConstType("1".to_string())
+                        value: ValueType::Const("1".to_string())
                     },
                     ResultType {
                         variable: "type".to_string(),
-                        value: ValueType::ConstType("breakpoint".to_string())
+                        value: ValueType::Const("breakpoint".to_string())
                     },
                     ResultType {
                         variable: "disp".to_string(),
-                        value: ValueType::ConstType("del".to_string())
+                        value: ValueType::Const("del".to_string())
                     }
                 ])
         );
@@ -293,20 +293,20 @@ mod tests {
             .parse(r##"[{from="0x00007ffff5106ff0",to="0x00007ffff5107cd2"},[a="cccc"]]"##);
         assert!(
             a.unwrap()
-                == ListType::ValueList(vec![
-                    ValueType::TupleType(TupleType::Results(vec![
+                == List::ValueList(vec![
+                    ValueType::Tuple(Tuple::Results(vec![
                         ResultType {
                             variable: "from".to_string(),
-                            value: ValueType::ConstType("0x00007ffff5106ff0".to_string())
+                            value: ValueType::Const("0x00007ffff5106ff0".to_string())
                         },
                         ResultType {
                             variable: "to".to_string(),
-                            value: ValueType::ConstType("0x00007ffff5107cd2".to_string())
+                            value: ValueType::Const("0x00007ffff5107cd2".to_string())
                         }
                     ])),
-                    ValueType::ListType(ListType::ResultList(vec![ResultType {
+                    ValueType::List(List::ResultList(vec![ResultType {
                         variable: "a".to_string(),
-                        value: ValueType::ConstType("cccc".to_string())
+                        value: ValueType::Const("cccc".to_string())
                     }]))
                 ])
         );
@@ -326,52 +326,52 @@ mod tests {
                             resaults: vec![
                                 ResultType {
                                     variable: "reason".to_string(),
-                                    value: ValueType::ConstType("end-stepping-range".to_string()),
+                                    value: ValueType::Const("end-stepping-range".to_string()),
                                 },
                                 ResultType {
                                     variable: "frame".to_string(),
-                                    value: ValueType::TupleType(TupleType::Results(vec![
+                                    value: ValueType::Tuple(Tuple::Results(vec![
                                         ResultType {
                                             variable: "addr".to_string(),
-                                            value: ValueType::ConstType(
+                                            value: ValueType::Const(
                                                 "0x00000000004006ff".to_string()
                                             ),
                                         },
                                         ResultType {
                                             variable: "func".to_string(),
-                                            value: ValueType::ConstType("main".to_string()),
+                                            value: ValueType::Const("main".to_string()),
                                         },
                                         ResultType {
                                             variable: "args".to_string(),
-                                            value: ValueType::ListType(ListType::None),
+                                            value: ValueType::List(List::None),
                                         },
                                         ResultType {
                                             variable: "file".to_string(),
-                                            value: ValueType::ConstType("a.c".to_string()),
+                                            value: ValueType::Const("a.c".to_string()),
                                         },
                                         ResultType {
                                             variable: "fullname".to_string(),
-                                            value: ValueType::ConstType(
+                                            value: ValueType::Const(
                                                 "/home/shizhilvren/c++/a.c".to_string()
                                             ),
                                         },
                                         ResultType {
                                             variable: "line".to_string(),
-                                            value: ValueType::ConstType("27".to_string()),
+                                            value: ValueType::Const("27".to_string()),
                                         },
                                     ]))
                                 },
                                 ResultType {
                                     variable: "thread-id".to_string(),
-                                    value: ValueType::ConstType("1".to_string()),
+                                    value: ValueType::Const("1".to_string()),
                                 },
                                 ResultType {
                                     variable: "stopped-threads".to_string(),
-                                    value: ValueType::ConstType("all".to_string()),
+                                    value: ValueType::Const("all".to_string()),
                                 },
                                 ResultType {
                                     variable: "core".to_string(),
-                                    value: ValueType::ConstType("6".to_string()),
+                                    value: ValueType::Const("6".to_string()),
                                 },
                             ],
                         }
@@ -392,7 +392,7 @@ mod tests {
                             async_class: AsyncClassType::Stopped,
                             resaults: vec![ResultType {
                                 variable: "arch".to_string(),
-                                value: ValueType::ConstType("i386:x86-64".to_string()),
+                                value: ValueType::Const("i386:x86-64".to_string()),
                             },],
                         }
                     }
@@ -412,46 +412,46 @@ mod tests {
                             resaults: vec![
                                 ResultType {
                                     variable: "id".to_string(),
-                                    value: ValueType::ConstType("1".to_string()),
+                                    value: ValueType::Const("1".to_string()),
                                 },
                                 ResultType {
                                     variable: "frame".to_string(),
-                                    value: ValueType::TupleType(TupleType::Results(vec![
+                                    value: ValueType::Tuple(Tuple::Results(vec![
                                         ResultType {
                                             variable: "level".to_string(),
-                                            value: ValueType::ConstType("1".to_string()),
+                                            value: ValueType::Const("1".to_string()),
                                         },
                                         ResultType {
                                             variable: "addr".to_string(),
-                                            value: ValueType::ConstType(
+                                            value: ValueType::Const(
                                                 "0x000000000020198c".to_string()
                                             ),
                                         },
                                         ResultType {
                                             variable: "func".to_string(),
-                                            value: ValueType::ConstType("main".to_string()),
+                                            value: ValueType::Const("main".to_string()),
                                         },
                                         ResultType {
                                             variable: "args".to_string(),
-                                            value: ValueType::ListType(ListType::None),
+                                            value: ValueType::List(List::None),
                                         },
                                         ResultType {
                                             variable: "file".to_string(),
-                                            value: ValueType::ConstType("args.c".to_string()),
+                                            value: ValueType::Const("args.c".to_string()),
                                         },
                                         ResultType {
                                             variable: "fullname".to_string(),
-                                            value: ValueType::ConstType(
+                                            value: ValueType::Const(
                                                 "/remote/x/x/code/c++/args.c".to_string()
                                             ),
                                         },
                                         ResultType {
                                             variable: "line".to_string(),
-                                            value: ValueType::ConstType("7".to_string()),
+                                            value: ValueType::Const("7".to_string()),
                                         },
                                         ResultType {
                                             variable: "arch".to_string(),
-                                            value: ValueType::ConstType("i386:x86-64".to_string()),
+                                            value: ValueType::Const("i386:x86-64".to_string()),
                                         },
                                     ])),
                                 },
@@ -474,7 +474,7 @@ mod tests {
                             async_class: AsyncClassType::Running,
                             resaults: vec![ResultType {
                                 variable: "thread-id".to_string(),
-                                value: ValueType::ConstType("1".to_string()),
+                                value: ValueType::Const("1".to_string()),
                             }]
                         }
                     }
@@ -492,8 +492,8 @@ mod tests {
         //     .map(|c| char::from(c))
         //     .collect::<String>();
         // ResultType {
-        //     variable: String::from(""),
-        //     value: ValueType::ConstType(String::from("")),
+        //     variable: *""),
+        //     value: ValueType::Const(*"")),
         // };
         // let e:ResultType;
         // let v: Vec<(ResultType, Tok)> = vec![];

@@ -2,7 +2,6 @@ use super::{gdbtty, Component};
 use crate::{action::Action, config::Config};
 use color_eyre::{eyre::Ok, Result};
 use ratatui::{prelude::*, widgets::*};
-use std::usize;
 use symbols::scrollbar;
 use tokio::sync::mpsc::UnboundedSender;
 // use tracing::debug;
@@ -57,12 +56,11 @@ impl Component for Home {
         mouse: crossterm::event::MouseEvent,
     ) -> Result<Option<Action>> {
         // debug!("gen mouseEvent {:?}", &mouse);
-        let ret = match mouse.kind {
+        match mouse.kind {
             crossterm::event::MouseEventKind::ScrollUp => Ok(Some(Action::Up)),
             crossterm::event::MouseEventKind::ScrollDown => Ok(Some(Action::Down)),
             _ => Ok(None),
-        };
-        ret
+        }
     }
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {

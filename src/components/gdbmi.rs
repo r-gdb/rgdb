@@ -64,7 +64,7 @@ impl Gdbmi {
                 0 => {}
                 _ => {
                     buf[0..n]
-                        .into_iter()
+                        .iter()
                         .map(|c| char::from(*c))
                         .filter(|c| *c != '\r')
                         .for_each(|f| match f {
@@ -151,7 +151,7 @@ impl Gdbmi {
             Some(fd) => {
                 let pty_name = tool::get_pty_name(fd)?;
                 info!("gdb mi start at {}", &pty_name);
-                Ok(format!("{}", pty_name))
+                Ok(pty_name.to_string())
             }
             _ => Err(eyre!("gdb mi pty start fail!")),
         };
@@ -176,14 +176,13 @@ impl Component for Gdbmi {
         Ok(())
     }
     fn update(&mut self, action: action::Action) -> Result<Option<action::Action>> {
-        let ret = match action {
+        match action {
             action::Action::Gdbmi(Action::Start) => {
                 let path = self.start_gdb_mi()?;
                 Ok(Some(action::Action::Gdbtty(gdbtty::Action::Start(path))))
             }
             _ => Ok(None),
-        };
-        ret
+        }
     }
     fn init(&mut self, _area: Size) -> Result<()> {
         match self.command_tx.clone() {
@@ -196,35 +195,31 @@ impl Component for Gdbmi {
 fn show_file(a: &OutOfBandRecordType) -> Option<(String, u64)> {
     let get_from_frame = |r: &ResultType| -> Option<(String, u64)> {
         let mut file = "".to_string();
-        let mut line = 0 as u64;
-        match r.variable.as_str() {
-            "frame" => {
-                if let ValueType::TupleType(TupleType::Results(rs)) = &r.value {
-                    rs.iter().for_each(|r| match r.variable.as_str() {
-                        "fullname" => {
-                            if let ValueType::ConstType(f) = &r.value {
-                                file = f.clone()
+        let mut line = 0_u64;
+        if r.variable.as_str() == "frame" {
+            if let ValueType::Tuple(Tuple::Results(rs)) = &r.value {
+                rs.iter().for_each(|r| match r.variable.as_str() {
+                    "fullname" => {
+                        if let ValueType::Const(f) = &r.value {
+                            file = f.clone()
+                        }
+                    }
+                    "line" => {
+                        if let ValueType::Const(l) = &r.value {
+                            if let std::result::Result::Ok(l) = l.parse::<u64>() {
+                                line = l
                             }
                         }
-                        "line" => {
-                            if let ValueType::ConstType(l) = &r.value {
-                                if let std::result::Result::Ok(l) = l.parse::<u64>() {
-                                    line = l
-                                }
-                            }
-                        }
-                        _ => {}
-                    });
-                }
+                    }
+                    _ => {}
+                });
             }
-            _ => {}
-        };
-        let ret = if file != "" && line != 0 {
+        }
+        if !file.is_empty() && line != 0 {
             Some((file, line))
         } else {
             None
-        };
-        ret
+        }
     };
     let mut ret = None;
     let OutOfBandRecordType::AsyncRecord(a) = a;
@@ -232,20 +227,18 @@ fn show_file(a: &OutOfBandRecordType) -> Option<(String, u64)> {
         AsyncRecordType::ExecAsyncOutput(a) => {
             if a.async_output.async_class == AsyncClassType::Stopped {
                 a.async_output.resaults.iter().for_each(|r| {
-                    get_from_frame(r).and_then(|a| {
+                    if let Some(a) = get_from_frame(r) {
                         ret = Some(a);
-                        Some(())
-                    });
+                    }
                 });
             }
         }
         AsyncRecordType::NotifyAsyncOutput(a) => {
             if a.async_output.async_class == AsyncClassType::ThreadSelected {
                 a.async_output.resaults.iter().for_each(|r| {
-                    get_from_frame(r).and_then(|a| {
+                    if let Some(a) = get_from_frame(r) {
                         ret = Some(a);
-                        Some(())
-                    });
+                    }
                 });
             }
         }
@@ -258,16 +251,16 @@ fn show_file(a: &OutOfBandRecordType) -> Option<(String, u64)> {
 fn f_show_file() {
     let a = miout::TokOutOfBandRecordParser::new()
         .parse(r##"*stopped,reason="end-stepping-range",frame={addr="0x00000000004006ff",func="main",args=[],file="a.c",fullname="/home/shizhilvren/c++/a.c",line="27"},thread-id="1",stopped-threads="all",core="6""##);
-    let b = show_file(&a.as_ref().unwrap());
+    let b = show_file(a.as_ref().unwrap());
     println!("{:?} {:?}", &a, &b);
-    assert!(b == Some(("/home/shizhilvren/c++/a.c".to_string(), 27 as u64)));
+    assert!(b == Some(("/home/shizhilvren/c++/a.c".to_string(), 27_u64)));
 }
 
 #[test]
 fn f_show_file_2() {
     let a = miout::TokOutOfBandRecordParser::new()
         .parse("=thread-selected,id=\"1\",frame={level=\"1\",addr=\"0x000000000020198c\",func=\"main\",args=[],file=\"args.c\",fullname=\"/remote/x/x/code/c++/args.c\",line=\"7\",arch=\"i386:x86-64\"}\n");
-    let b = show_file(&a.as_ref().unwrap());
+    let b = show_file(a.as_ref().unwrap());
     println!("{:?} {:?}", &a, &b);
-    assert!(b == Some(("/remote/x/x/code/c++/args.c".to_string(), 7 as u64)));
+    assert!(b == Some(("/remote/x/x/code/c++/args.c".to_string(), 7_u64)));
 }

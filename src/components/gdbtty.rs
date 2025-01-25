@@ -1,13 +1,12 @@
 use super::Component;
 use crate::tool;
 use crate::{action, config::Config};
-use std::str::FromStr;
-// use bytes;
 use color_eyre::{eyre::eyre, eyre::Ok, Result};
 use portable_pty::{native_pty_system, Child, CommandBuilder, PtyPair, PtySize};
 use ratatui::prelude::*;
 use serde::{Deserialize, Serialize};
 use smol::io::AsyncReadExt;
+use std::str::FromStr;
 use strum::Display;
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tracing::error;
@@ -51,7 +50,7 @@ impl Gdbtty {
             let action = match n {
                 0 => None,
                 _ => {
-                    let out = buf[0..n].into_iter().map(|c| *c).collect::<Vec<_>>();
+                    let out = buf[0..n].to_vec();
                     Some(Action::Out(out))
                 }
             };
@@ -79,7 +78,7 @@ impl Gdbtty {
             })
             .map_err(|e| eyre!(format!("{:?}", e)))?;
         let s = format!("new-ui mi {}", path.as_str());
-        let args = vec!["gdb", "--nw", "--ex", s.as_str()]
+        let args = ["gdb", "--nw", "--ex", s.as_str()]
             .iter()
             .map(|s| -> Result<std::ffi::OsString> { Ok(std::ffi::OsString::from_str(s)?) })
             .collect::<Result<Vec<_>>>()?;
@@ -109,7 +108,7 @@ impl Gdbtty {
             Some(fd) => {
                 let pty_name = tool::get_pty_name(fd)?;
                 info!("gdb tty start at {}", &pty_name);
-                Ok(format!("{}", pty_name))
+                Ok(pty_name.to_string())
             }
             _ => Err(eyre!("gdb mi pty start fail!")),
         }?;
@@ -225,7 +224,7 @@ impl Component for Gdbtty {
         key: crossterm::event::KeyEvent,
     ) -> Result<Option<action::Action>> {
         if let Some(bytes) = Gdbtty::handle_pane_key_event(&key) {
-            let bytes = bytes.into_iter().map(|c| char::from(c)).collect::<String>();
+            let bytes = bytes.into_iter().map(char::from).collect::<String>();
             if let Some(write) = self.gdb_writer.as_mut() {
                 write!(write, "{}", bytes.as_str())?;
             }
@@ -239,12 +238,8 @@ impl Component for Gdbtty {
                 error!("gdb task finish!");
             };
         }
-        // debug!("gdb update action{:?}", &action);
-        match action {
-            action::Action::Gdbtty(Action::Start(path)) => {
-                self.gdbtty_start(path)?;
-            }
-            _ => {}
+        if let action::Action::Gdbtty(Action::Start(path)) = action {
+            self.gdbtty_start(path)?;
         }
         Ok(None)
     }
