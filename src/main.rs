@@ -20,10 +20,10 @@ mod mi;
 mod tool;
 mod tui;
 
-// #[tokio::main(flavor = "current_thread")]
+#[tokio::main(flavor = "current_thread")]
 // #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 // #[tokio::main]
-#[tokio::main(worker_threads = 2)]
+// #[tokio::main(worker_threads = 2)]
 async fn main() -> Result<()> {
     crate::errors::init()?;
     crate::logging::init()?;

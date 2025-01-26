@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use super::{gdbtty, Component};
 use crate::{action, config::Config};
 use color_eyre::{eyre::Ok, Result};
@@ -21,6 +23,7 @@ pub struct Home {
     vertical_scroll_state: ScrollbarState,
     vertical_scroll: usize,
     area: Rect,
+    area_change_time: Option<Instant>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
@@ -40,6 +43,7 @@ impl Home {
             vertical_scroll: s.vertical_scroll,
             area: s.area,
             vt100_parser_buffer: s.vt100_parser_buffer,
+            area_change_time: None,
         }
     }
     fn get_text_hight(&mut self, _area: &Rect) -> usize {
@@ -125,7 +129,8 @@ impl Component for Home {
             }
             action::Action::Resize(x, y) => {
                 self.set_area(&layout::Size::new(x, y));
-                self.set_vt100_area(&layout::Size::new(x, y));
+                // self.set_vt100_area(&layout::Size::new(x, y));
+                self.area_change_time = Some(Instant::now());
             }
             action::Action::Home(Action::Up(s)) => {
                 self.scroll_up(s);
@@ -147,6 +152,17 @@ impl Component for Home {
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
         // debug!("start one draw");
+        if let Some(now) = self.area_change_time {
+            match now.elapsed() > Duration::from_millis(400) {
+                true => {
+                    self.area_change_time = None;
+                    self.set_vt100_area(&area.as_size());
+                }
+                false => {
+                    return Ok(());
+                }
+            }
+        }
         let [_, _, area] = tool::get_layout(area);
         let n = self.get_text_hight(&area);
         self.vertical_scroll = self.vertical_scroll.min(n);
