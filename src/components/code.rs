@@ -29,6 +29,8 @@ pub struct Code {
 pub enum Action {
     FileReadOutLine((String, String)),
     FileReadEnd(String),
+    Up(usize),
+    Down(usize),
 }
 
 #[derive(Clone, Eq, Debug)]
@@ -311,8 +313,12 @@ impl Component for Code {
     ) -> Result<Option<action::Action>> {
         // debug!("gen mouseEvent {:?}", &mouse);
         match mouse.kind {
-            crossterm::event::MouseEventKind::ScrollUp => Ok(Some(action::Action::Up)),
-            crossterm::event::MouseEventKind::ScrollDown => Ok(Some(action::Action::Down)),
+            crossterm::event::MouseEventKind::ScrollUp => {
+                Ok(Some(action::Action::Code(Action::Up(3))))
+            }
+            crossterm::event::MouseEventKind::ScrollDown => {
+                Ok(Some(action::Action::Code(Action::Down(3))))
+            }
             _ => Ok(None),
         }
     }
@@ -324,11 +330,11 @@ impl Component for Code {
             action::Action::Render => {
                 // add any logic here that should run on every render
             }
-            action::Action::Up => {
-                self.file_up(1);
+            action::Action::Code(Action::Up(p)) => {
+                self.file_up(p);
             }
-            action::Action::Down => {
-                self.file_down(1);
+            action::Action::Code(Action::Down(p)) => {
+                self.file_down(p);
             }
             action::Action::Gdbmi(gdbmi::Action::ShowFile((file, line_id))) => {
                 self.file_need_show = Some((file.clone(), line_id));

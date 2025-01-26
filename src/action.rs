@@ -4,6 +4,7 @@ use strum::Display;
 use crate::components::code;
 use crate::components::gdbmi;
 use crate::components::gdbtty;
+use crate::components::home;
 
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
 pub enum Action {
@@ -16,8 +17,7 @@ pub enum Action {
     ClearScreen,
     Error(String),
     Help,
-    Up,
-    Down,
+    Home(home::Action),
     Gdbtty(gdbtty::Action),
     Gdbmi(gdbmi::Action),
     Code(code::Action),
