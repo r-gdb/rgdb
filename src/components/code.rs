@@ -6,9 +6,14 @@ use color_eyre::{eyre::Ok, Result};
 use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::ffi::OsStr;
 use std::hash::Hash;
+use std::path::Path;
 use strum::Display;
 use symbols::scrollbar;
+use syntect::easy::HighlightLines;
+use syntect::parsing::SyntaxSet;
+use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
 use tokio::fs::File;
 use tokio::io::AsyncBufReadExt;
 use tokio::sync::mpsc::UnboundedSender;
@@ -29,6 +34,8 @@ pub struct Code {
 pub enum Action {
     FileReadOutLine((String, String)),
     FileReadEnd(String),
+    FilehighlightLine((String, Vec<(ratatui::style::Color, String)>)),
+    FilehighlightEnd(String),
     Up(usize),
     Down(usize),
 }
@@ -37,7 +44,9 @@ pub enum Action {
 pub struct SrcFileData {
     pub file_name: String,
     lines: Vec<String>,
+    lines_highlight: Vec<Vec<(ratatui::style::Color, String)>>,
     read_done: bool,
+    highlight_done: bool,
 }
 
 impl PartialEq for SrcFileData {
@@ -51,11 +60,16 @@ impl SrcFileData {
         Self {
             file_name,
             lines: vec![],
+            lines_highlight: vec![],
             read_done: false,
+            highlight_done: false,
         }
     }
     pub fn add_line(&mut self, line: String) {
         self.lines.push(line);
+    }
+    pub fn add_highlight_line(&mut self, line: Vec<(ratatui::style::Color, String)>) {
+        self.lines_highlight.push(line);
     }
     pub fn get_read_done(&self) -> bool {
         self.read_done
@@ -63,8 +77,17 @@ impl SrcFileData {
     pub fn set_read_done(&mut self) {
         self.read_done = true;
     }
+    pub fn get_highlight_done(&self) -> bool {
+        self.highlight_done
+    }
+    pub fn set_highlight_done(&mut self) {
+        self.highlight_done = true;
+    }
     pub fn get_lines_len(&self) -> usize {
         self.lines.len()
+    }
+    pub fn get_lines(&self) -> &Vec<String> {
+        self.lines.as_ref()
     }
     pub fn get_lines_range(&self, start: usize, end: usize) -> (Vec<&String>, usize, usize) {
         let n = self.lines.len().saturating_add(1);
@@ -75,6 +98,24 @@ impl SrcFileData {
                 .skip(start.saturating_sub(1))
                 .take(end.saturating_sub(start))
                 .collect(),
+            start,
+            end,
+        )
+    }
+    pub fn get_highlight_lines_range(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> (Vec<Vec<(ratatui::style::Color, String)>>, usize, usize) {
+        let n = self.lines_highlight.len().saturating_add(1);
+        let end = n.min(end);
+        (
+            self.lines_highlight
+                .iter()
+                .skip(start.saturating_sub(1))
+                .take(end.saturating_sub(start))
+                .cloned()
+                .collect::<Vec<Vec<_>>>(),
             start,
             end,
         )
@@ -90,6 +131,60 @@ impl Hash for SrcFileData {
 impl Code {
     pub fn new() -> Self {
         Self::default()
+    }
+    async fn highlight_file(
+        file_name: String,
+        lines: Vec<String>,
+        send: UnboundedSender<action::Action>,
+    ) {
+        let ps = SyntaxSet::load_defaults_newlines();
+        let ts = syntect::highlighting::ThemeSet::load_defaults();
+        let ext = Path::new(&file_name).extension().and_then(OsStr::to_str);
+        if let Some(ext) = ext {
+            if let Some(syntax) = ps.find_syntax_by_extension(ext) {
+                let mut h = HighlightLines::new(syntax, &ts.themes["base16-mocha.dark"]);
+                lines.iter().for_each(|s| match h.highlight_line(s, &ps) {
+                    std::result::Result::Ok(ranges) => {
+                        let e = ranges
+                            .into_iter()
+                            .map(|(c, s)| {
+                                (
+                                    ratatui::style::Color::Rgb(
+                                        c.foreground.r,
+                                        c.foreground.g,
+                                        c.foreground.b,
+                                    ),
+                                    s.to_string(),
+                                )
+                            })
+                            .collect();
+                        match send.send(action::Action::Code(Action::FilehighlightLine((
+                            file_name.clone(),
+                            e,
+                        )))) {
+                            std::result::Result::Ok(_) => {}
+                            std::result::Result::Err(e) => {
+                                error!("send error: {:?}", e);
+                            }
+                        }
+                        // debug!("highlight {:?}", ranges);
+                    }
+                    std::result::Result::Err(e) => {
+                        error!("file {} highlight fail {} {}", &file_name, &s, e);
+                    }
+                });
+                match send.send(action::Action::Code(Action::FilehighlightEnd(file_name))) {
+                    std::result::Result::Ok(_) => {}
+                    std::result::Result::Err(e) => {
+                        error!("send error: {:?}", e);
+                    }
+                }
+            } else {
+                error!("file {} not have extension", &ext);
+            }
+        } else {
+            error!("file {} not have extension", &file_name);
+        }
     }
     async fn read_file(file: String, send: UnboundedSender<action::Action>) {
         match File::open(&file).await {
@@ -175,7 +270,6 @@ impl Code {
     fn draw_all(
         &mut self,
         frame: &mut Frame,
-        src: Vec<String>,
         start_line: usize,
         end_line: usize,
         line_id: usize,
@@ -191,7 +285,14 @@ impl Code {
         } else {
             None
         };
-        let mark_as_id = self.draw_src(frame, src, &line_id_start_0, area_src);
+        let mark_as_id = self.draw_src(
+            frame,
+            &file_name,
+            start_line,
+            end_line,
+            &line_id_start_0,
+            area_src,
+        );
         self.draw_id(frame, start_line, end_line, line_id, area_ids);
         self.draw_split(frame, &line_id_start_0, mark_as_id, area_split);
         self.draw_status(frame, n, file_name, area_status);
@@ -199,7 +300,9 @@ impl Code {
     fn draw_src(
         &mut self,
         frame: &mut Frame,
-        src: Vec<String>,
+        file_name: &String,
+        start_line: usize,
+        end_line: usize,
         line_id_start_0: &Option<usize>,
         area_src: Rect,
     ) -> bool {
@@ -209,13 +312,37 @@ impl Code {
             .style(Style::default())
             // .title(title)
             .title_alignment(Alignment::Center);
-        let text_src = Text::from_iter(src.iter().enumerate().map(|(id, s)| {
+
+        // let empty_vec: (Vec<Vec<(_, _)>>, Vec<_>) = (vec![], vec![]);
+        let (src, src_str) = match self.files_set.get(&SrcFileData::new(file_name.clone())) {
+            Some(file) => match (file.get_read_done(), file.get_highlight_done()) {
+                (true, true) => (
+                    file.get_highlight_lines_range(start_line, end_line).0,
+                    file.get_lines_range(start_line, end_line).0,
+                ),
+                (false, true) => (
+                    file.get_lines_range(start_line, end_line)
+                        .0
+                        .iter()
+                        .map(|s| vec![(ratatui::style::Color::White, s.to_string())])
+                        .collect(),
+                    file.get_lines_range(start_line, end_line).0,
+                ),
+                _ => (vec![], vec![]),
+            },
+            None => (vec![], vec![]),
+        };
+        let text_src = Text::from_iter(src.iter().map(|s| {
+            // debug!("line stop {} {:?}", id, first_litter_id);
+            Line::from_iter(s.iter().map(|(c, s)| Span::raw(s).fg(*c)))
+        }));
+        let text_pointer = Text::from_iter(src_str.iter().enumerate().map(|(id, s)| {
             let first_litter_id = match *line_id_start_0 == Some(id) {
                 true => s.chars().enumerate().find(|(_, c)| *c != ' '),
                 false => None,
             };
             // debug!("line stop {} {:?}", id, first_litter_id);
-            let str_iter = s.chars().map(|c| Span::raw(c.to_string()));
+            let str_iter = std::iter::empty();
             Line::from(match first_litter_id {
                 Some((0, _)) => str_iter.collect::<Vec<_>>(),
                 Some((1, _)) => str_iter.collect::<Vec<_>>(),
@@ -229,7 +356,6 @@ impl Code {
                         Span::raw('>'.to_string()).style(Style::default().light_green()),
                         1,
                     ))
-                    .chain(str_iter.skip(n.saturating_sub(1)).collect::<Vec<_>>())
                     .collect::<Vec<_>>()
                 }
                 _ => str_iter.collect::<Vec<_>>(),
@@ -237,8 +363,10 @@ impl Code {
         }));
 
         let paragraph_src = Paragraph::new(text_src);
+        let paragraph_pointer = Paragraph::new(text_pointer);
 
         frame.render_widget(paragraph_src, area_src);
+        frame.render_widget(paragraph_pointer, area_src);
         frame.render_widget(block_src, area_src);
         let scrollbar =
             Scrollbar::new(ScrollbarOrientation::VerticalRight).symbols(scrollbar::VERTICAL);
@@ -372,7 +500,43 @@ impl Component for Code {
             action::Action::Code(Action::FileReadEnd(file)) => {
                 match self.files_set.take(&SrcFileData::new(file.clone())) {
                     Some(mut file_data) => {
-                        file_data.set_read_done();
+                        if let Some(send) = self.command_tx.clone() {
+                            file_data.set_read_done();
+                            self.files_set.insert(file_data.clone());
+                            let highlight_thread = Self::highlight_file(
+                                file.clone(),
+                                file_data.get_lines().clone(),
+                                send.clone(),
+                            );
+                            tokio::spawn(async {
+                                highlight_thread.await;
+                            });
+                            debug!("highlight file {} start", file);
+                        } else {
+                            let msg = format!("read file {} thread not start", &file);
+                            error!("{}", &msg);
+                        }
+                    }
+                    _ => {
+                        error!("file {} not found", &file);
+                    }
+                }
+            }
+            action::Action::Code(Action::FilehighlightLine((file, line))) => {
+                match self.files_set.take(&SrcFileData::new(file.clone())) {
+                    Some(mut file_data) => {
+                        file_data.add_highlight_line(line);
+                        self.files_set.insert(file_data);
+                    }
+                    _ => {
+                        error!("file {} not found", &file);
+                    }
+                }
+            }
+            action::Action::Code(Action::FilehighlightEnd(file)) => {
+                match self.files_set.take(&SrcFileData::new(file.clone())) {
+                    Some(mut file_data) => {
+                        file_data.set_highlight_done();
                         self.files_set.insert(file_data);
                     }
                     _ => {
@@ -412,10 +576,8 @@ impl Component for Code {
         ) = (ans, self.get_need_show_file())
         {
             let (start_line, end_line) = self.get_windows_show_file_range(area_src.height as usize);
-            let (src, start_line, end_line) = file.get_lines_range(start_line, end_line);
-            let src = src.iter().map(|s| s.to_string()).collect::<Vec<String>>();
+            let (_, start_line, end_line) = file.get_lines_range(start_line, end_line);
             Some((
-                src,
                 start_line,
                 end_line,
                 line_id,
@@ -431,7 +593,6 @@ impl Component for Code {
         };
 
         if let Some((
-            src,
             start_line,
             end_line,
             line_id,
@@ -445,7 +606,6 @@ impl Component for Code {
         {
             self.draw_all(
                 frame,
-                src,
                 start_line,
                 end_line,
                 line_id as usize,
