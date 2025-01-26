@@ -17,6 +17,7 @@ pub struct Home {
     config: Config,
 
     vt100_parser: vt100::Parser,
+    vt100_parser_buffer: Vec<u8>,
     vertical_scroll_state: ScrollbarState,
     vertical_scroll: usize,
     area: Rect,
@@ -38,6 +39,7 @@ impl Home {
             vertical_scroll_state: s.vertical_scroll_state,
             vertical_scroll: s.vertical_scroll,
             area: s.area,
+            vt100_parser_buffer: s.vt100_parser_buffer,
         }
     }
     fn get_text_hight(&mut self, _area: &Rect) -> usize {
@@ -69,13 +71,19 @@ impl Home {
                 horizontal: 1,
             })
             .as_size();
-        self.vt100_parser.set_size(in_size.height, in_size.width);
+        // self.vt100_parser.set_size(in_size.height, in_size.width);
+        debug!("start resize {}", self.vt100_parser_buffer.len());
+        self.vt100_parser = vt100::Parser::new(in_size.height, in_size.width, usize::MAX);
+        self.vt100_parser
+            .process(self.vt100_parser_buffer.as_slice());
+        debug!("end resize {}", self.vt100_parser_buffer.len());
     }
 }
 
 impl Component for Home {
     fn init(&mut self, area: Size) -> Result<()> {
         self.set_area(&area);
+        self.set_vt100_area(&area);
         Ok(())
     }
     fn register_action_handler(&mut self, tx: UnboundedSender<action::Action>) -> Result<()> {
@@ -126,6 +134,7 @@ impl Component for Home {
                 self.scroll_down(s);
             }
             action::Action::Gdbtty(gdbtty::Action::Out(out)) => {
+                self.vt100_parser_buffer.append(out.clone().as_mut());
                 self.vt100_parser.process(out.as_slice());
                 self.vt100_parser.set_scrollback(0);
                 self.vertical_scroll = 0;
