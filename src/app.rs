@@ -1,18 +1,19 @@
-use color_eyre::Result;
-use crossterm::event::KeyEvent;
-use ratatui::prelude::Rect;
-use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
-use tracing::{debug, info};
-
+use crate::components::gdbmi::Action as GdbmiAction;
+use crate::components::gdbtty::Action as GdbttyAction;
 use crate::{
-    action::Action,
+    action,
     components::{
         code::Code, fps::FpsCounter, gdbmi::Gdbmi, gdbtty::Gdbtty, home::Home, Component,
     },
     config::Config,
     tui::{Event, Tui},
 };
+use color_eyre::Result;
+use crossterm::event::KeyEvent;
+use ratatui::prelude::Rect;
+use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
+use tracing::{debug, info};
 
 pub struct App {
     config: Config,
@@ -23,8 +24,10 @@ pub struct App {
     should_suspend: bool,
     mode: Mode,
     last_tick_key_events: Vec<KeyEvent>,
-    action_tx: mpsc::UnboundedSender<Action>,
-    action_rx: mpsc::UnboundedReceiver<Action>,
+    action_tx: mpsc::UnboundedSender<action::Action>,
+    action_rx: mpsc::UnboundedReceiver<action::Action>,
+    gdb_path: String,
+    gdb_args: Vec<String>,
 }
 
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -34,7 +37,12 @@ pub enum Mode {
 }
 
 impl App {
-    pub fn new(tick_rate: f64, frame_rate: f64) -> Result<Self> {
+    pub fn new(
+        tick_rate: f64,
+        frame_rate: f64,
+        gdb_path: String,
+        gdb_args: Vec<String>,
+    ) -> Result<Self> {
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Ok(Self {
             tick_rate,
@@ -53,6 +61,8 @@ impl App {
             last_tick_key_events: Vec::new(),
             action_tx,
             action_rx,
+            gdb_path: gdb_path,
+            gdb_args: gdb_args,
         })
     }
 
@@ -73,14 +83,16 @@ impl App {
             component.init(tui.size()?)?;
         }
 
+        self.init()?;
+
         let action_tx = self.action_tx.clone();
         loop {
             self.handle_events(&mut tui).await?;
             self.handle_actions(&mut tui)?;
             if self.should_suspend {
                 tui.suspend()?;
-                action_tx.send(Action::Resume)?;
-                action_tx.send(Action::ClearScreen)?;
+                action_tx.send(action::Action::Resume)?;
+                action_tx.send(action::Action::ClearScreen)?;
                 // tui.mouse(true);
                 tui.enter()?;
             } else if self.should_quit {
@@ -98,10 +110,10 @@ impl App {
         };
         let action_tx = self.action_tx.clone();
         match event {
-            Event::Quit => action_tx.send(Action::Quit)?,
-            Event::Tick => action_tx.send(Action::Tick)?,
-            Event::Render => action_tx.send(Action::Render)?,
-            Event::Resize(x, y) => action_tx.send(Action::Resize(x, y))?,
+            Event::Quit => action_tx.send(action::Action::Quit)?,
+            Event::Tick => action_tx.send(action::Action::Tick)?,
+            Event::Render => action_tx.send(action::Action::Render)?,
+            Event::Resize(x, y) => action_tx.send(action::Action::Resize(x, y))?,
             Event::Key(key) => self.handle_key_event(key)?,
             _ => {}
         }
@@ -140,19 +152,19 @@ impl App {
 
     fn handle_actions(&mut self, tui: &mut Tui) -> Result<()> {
         while let Ok(action) = self.action_rx.try_recv() {
-            if action != Action::Tick && action != Action::Render {
+            if action != action::Action::Tick && action != action::Action::Render {
                 debug!("{action:?}");
             }
             match action {
-                Action::Tick => {
+                action::Action::Tick => {
                     self.last_tick_key_events.drain(..);
                 }
-                Action::Quit => self.should_quit = true,
-                Action::Suspend => self.should_suspend = true,
-                Action::Resume => self.should_suspend = false,
-                Action::ClearScreen => tui.terminal.clear()?,
-                Action::Resize(w, h) => self.handle_resize(tui, w, h)?,
-                Action::Render => self.render(tui)?,
+                action::Action::Quit => self.should_quit = true,
+                action::Action::Suspend => self.should_suspend = true,
+                action::Action::Resume => self.should_suspend = false,
+                action::Action::ClearScreen => tui.terminal.clear()?,
+                action::Action::Resize(w, h) => self.handle_resize(tui, w, h)?,
+                action::Action::Render => self.render(tui)?,
                 _ => {}
             }
             for component in self.components.iter_mut() {
@@ -176,10 +188,22 @@ impl App {
                 if let Err(err) = component.draw(frame, frame.area()) {
                     let _ = self
                         .action_tx
-                        .send(Action::Error(format!("Failed to draw: {:?}", err)));
+                        .send(action::Action::Error(format!("Failed to draw: {:?}", err)));
                 }
             }
         })?;
+        Ok(())
+    }
+
+    fn init(&self) -> Result<()> {
+        let s = self.action_tx.clone();
+        s.send(action::Action::Gdbtty(GdbttyAction::SetGdb(
+            self.gdb_path.clone(),
+        )))?;
+        s.send(action::Action::Gdbtty(GdbttyAction::SetGdbArgs(
+            self.gdb_args.clone(),
+        )))?;
+        s.send(action::Action::Gdbmi(GdbmiAction::Start))?;
         Ok(())
     }
 }

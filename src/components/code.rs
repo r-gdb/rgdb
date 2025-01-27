@@ -13,7 +13,6 @@ use strum::Display;
 use symbols::scrollbar;
 use syntect::easy::HighlightLines;
 use syntect::parsing::SyntaxSet;
-use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
 use tokio::fs::File;
 use tokio::io::AsyncBufReadExt;
 use tokio::sync::mpsc::UnboundedSender;

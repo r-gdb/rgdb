@@ -185,10 +185,7 @@ impl Component for Gdbmi {
         }
     }
     fn init(&mut self, _area: Size) -> Result<()> {
-        match self.command_tx.clone() {
-            Some(s) => Ok(s.send(action::Action::Gdbmi(Action::Start))?),
-            _ => Err(eyre!("gdm mi init fail!")),
-        }
+        Ok(())
     }
 }
 

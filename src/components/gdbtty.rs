@@ -22,6 +22,8 @@ pub struct Gdbtty {
     gdb_process: Option<Box<dyn Child + Send + Sync>>,
     gdb_read_task: Option<JoinHandle<()>>,
     pty_pair: Option<PtyPair>,
+    gdb_path: String,
+    gdb_args: Vec<String>,
 }
 
 impl Gdbtty {
@@ -34,9 +36,17 @@ impl Gdbtty {
 pub enum Action {
     Out(Vec<u8>),
     Start(String),
+    SetGdb(String),
+    SetGdbArgs(Vec<String>),
 }
 
 impl Gdbtty {
+    fn set_gdb_path(&mut self, path: String) {
+        self.gdb_path = path;
+    }
+    fn set_gdb_args(&mut self, args: Vec<String>) {
+        self.gdb_args = args;
+    }
     async fn gdbtty_reader(
         reader: Box<dyn std::io::Read + Send>,
         send: UnboundedSender<action::Action>,
@@ -62,7 +72,7 @@ impl Gdbtty {
             };
         }
     }
-    fn gdbtty_start(&mut self, path: String) -> Result<()> {
+    fn gdbtty_start(&mut self, pts_path: String) -> Result<()> {
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize {
@@ -77,11 +87,15 @@ impl Gdbtty {
                 pixel_height: 0,
             })
             .map_err(|e| eyre!(format!("{:?}", e)))?;
-        let s = format!("new-ui mi {}", path.as_str());
-        let args = ["gdb", "--nw", "--ex", s.as_str()]
+        let s = format!("new-ui mi {}", pts_path.as_str());
+        let gdb_args = self.gdb_args.iter().map(|s| s.as_str());
+        let args = [self.gdb_path.as_str(), "--nw", "--ex", s.as_str()]
             .iter()
+            .map(|s| *s)
+            .chain(gdb_args)
             .map(|s| -> Result<std::ffi::OsString> { Ok(std::ffi::OsString::from_str(s)?) })
             .collect::<Result<Vec<_>>>()?;
+        debug!("gdb tty start with {:?}", &args);
         // Spawn a shell into the pty
         let cmd = CommandBuilder::from_argv(args);
         let child = pair
@@ -238,8 +252,11 @@ impl Component for Gdbtty {
                 error!("gdb task finish!");
             };
         }
-        if let action::Action::Gdbtty(Action::Start(path)) = action {
-            self.gdbtty_start(path)?;
+        match action {
+            action::Action::Gdbtty(Action::SetGdb(path)) => self.set_gdb_path(path),
+            action::Action::Gdbtty(Action::SetGdbArgs(args)) => self.set_gdb_args(args),
+            action::Action::Gdbtty(Action::Start(pts_path)) => self.gdbtty_start(pts_path)?,
+            _ => {}
         }
         Ok(None)
     }
