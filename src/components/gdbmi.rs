@@ -244,20 +244,26 @@ fn show_file(a: &OutOfBandRecordType) -> Option<(String, u64)> {
     ret
 }
 
-#[test]
-fn f_show_file() {
-    let a = miout::TokOutOfBandRecordParser::new()
-        .parse(r##"*stopped,reason="end-stepping-range",frame={addr="0x00000000004006ff",func="main",args=[],file="a.c",fullname="/home/shizhilvren/c++/a.c",line="27"},thread-id="1",stopped-threads="all",core="6""##);
-    let b = show_file(a.as_ref().unwrap());
-    println!("{:?} {:?}", &a, &b);
-    assert!(b == Some(("/home/shizhilvren/c++/a.c".to_string(), 27_u64)));
-}
+#[cfg(test)]
+mod tests {
+    use crate::components::gdbmi::show_file;
+    use crate::miout;
+    #[test]
+    fn f_show_file() {
+        let a = miout::TokOutOfBandRecordParser::new()
+            .parse(r##"*stopped,reason="end-stepping-range",frame={addr="0x00000000004006ff",func="main",args=[],file="a.c",fullname="/home/shizhilvren/c++/a.c",line="27"},thread-id="1",stopped-threads="all",core="6"
+"##);
+        let b = show_file(a.as_ref().unwrap());
+        println!("{:?} {:?}", &a, &b);
+        assert!(b == Some(("/home/shizhilvren/c++/a.c".to_string(), 27_u64)));
+    }
 
-#[test]
-fn f_show_file_2() {
-    let a = miout::TokOutOfBandRecordParser::new()
-        .parse("=thread-selected,id=\"1\",frame={level=\"1\",addr=\"0x000000000020198c\",func=\"main\",args=[],file=\"args.c\",fullname=\"/remote/x/x/code/c++/args.c\",line=\"7\",arch=\"i386:x86-64\"}\n");
-    let b = show_file(a.as_ref().unwrap());
-    println!("{:?} {:?}", &a, &b);
-    assert!(b == Some(("/remote/x/x/code/c++/args.c".to_string(), 7_u64)));
+    #[test]
+    fn f_show_file_2() {
+        let a = miout::TokOutOfBandRecordParser::new()
+            .parse("=thread-selected,id=\"1\",frame={level=\"1\",addr=\"0x000000000020198c\",func=\"main\",args=[],file=\"args.c\",fullname=\"/remote/x/x/code/c++/args.c\",line=\"7\",arch=\"i386:x86-64\"}\n");
+        let b = show_file(a.as_ref().unwrap());
+        println!("{:?} {:?}", &a, &b);
+        assert!(b == Some(("/remote/x/x/code/c++/args.c".to_string(), 7_u64)));
+    }
 }

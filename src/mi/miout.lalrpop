@@ -4,7 +4,12 @@ use crate::mi::token::*;
 grammar;
 
 match {
-    "\"",
+    "\t" => HORIZONTALTABLE,
+    "\r" => CARRIGERETURN,
+    "\n" => LINEFEED,
+    " "  => WHITESPACE,
+    // workaround for whitespace https://github.com/lalrpop/lalrpop/issues/678
+    "" => {},
 } else {
     _
 }
@@ -20,11 +25,11 @@ pub TokAsyncRecord:AsyncRecordType = {
 
 
 pub TokExecAsyncOutput:ExecAsyncOutputType = {
-    "*" <a:TokAsyncOutput> => ExecAsyncOutputType{ async_output:a },
+    "*" <a:TokAsyncOutput> <c:TokNewLine> => ExecAsyncOutputType{ async_output:a },
 }
 
 pub TokNotifyAsyncOutput:NotifyAsyncOutputType = {
-    <e:TokEq> <a:TokAsyncOutput> => NotifyAsyncOutputType{ async_output:a },
+    <e:TokEq> <a:TokAsyncOutput> <c:TokNewLine> => NotifyAsyncOutputType{ async_output:a },
 } 
 
 pub TokAsyncOutput:AsyncOutputType = {
@@ -104,7 +109,7 @@ pub TokCString:String = {
 };
 
 pub TokNum:String = {
-    <s:r"\d"> => String::from(s),
+    <s:r"[0-9]"> => String::from(s),
 };
 
 pub TokEq:Tok = {
@@ -120,8 +125,8 @@ pub TokComma:Tok = {
 };
 
 pub TokNewLine:NewLineType = {
-    "\r" "\n" => NewLineType::Windows,
-    "\n" => NewLineType::Linux,
+    <a:CARRIGERETURN> <b:LINEFEED> => NewLineType::Windows,
+    <a:LINEFEED> => NewLineType::Linux,
 }
 
 pub TokStringChar:String = {
@@ -134,7 +139,7 @@ pub TokStringChar:String = {
 
 
 pub TokCStringChar:String = {
-    <c:" "> => String::from_str(c).unwrap(), //0x20
+    <c:WHITESPACE> => String::from_str(c).unwrap(), //0x20
     <c:"!"> => String::from_str(c).unwrap(),
     <c1:"\\"> <c2:"\""> => String::from_str("\\\"").unwrap(),
     <c:"#"> => String::from_str(c).unwrap(),
@@ -172,9 +177,13 @@ pub TokCStringChar:String = {
     <c:"~"> => String::from_str(c).unwrap(),
 
 
-    <c:"\t"> => String::from_str(c).unwrap(),
-    <c:"\r"> => String::from_str(c).unwrap(),
-    <c:"\n"> => String::from_str(c).unwrap(), //0x7E
+    <c:HORIZONTALTABLE> => String::from_str("\t").unwrap(),
+    <c:CARRIGERETURN> => String::from_str("\r").unwrap(),
+    <c:LINEFEED> => String::from_str("\n").unwrap(), //0x7E
+    <c:TokUTF8Char> => {
+        c
+    },
+
 };
 
 
@@ -237,3 +246,15 @@ pub TokUppercaseLetter: String = {
     <c:"Y"> => String::from_str(c).unwrap(),
     <c:"Z"> => String::from_str(c).unwrap(),
 };
+
+// pub TokUTF8Chars: String = {
+//     <s:(<TokUTF8Char>)+> => vec_string_to_string(s),
+// };
+
+pub TokUTF8Char: String = {
+    <c:r#"[^\x00-\x7f]"#> => {
+        let ans = std::str::from_utf8(c.as_bytes()).unwrap().to_string();
+        ans
+    },
+};
+

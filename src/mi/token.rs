@@ -5,6 +5,7 @@ lalrpop_mod!(
     miout,
     "/mi/miout.rs"
 );
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Tok {
     Eq,
@@ -91,10 +92,8 @@ pub enum List {
 // }
 
 pub fn vec_string_to_string(s: Vec<String>) -> String {
-    s.iter()
-        .flat_map(|s| s.bytes())
-        .map(char::from)
-        .collect::<String>()
+    let ans = s.iter().fold(String::from(""), |ans, s| ans + s);
+    ans
 }
 
 #[cfg(test)]
@@ -194,13 +193,130 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn f_c_string_8() {
         let s = r###""中文""###;
         let a = miout::TokCStringParser::new().parse(s);
-        println!("s:{:?} {} {:?}", &s, s.len(), &a);
-        assert!(a.unwrap() == *r###"中文"###);
+        if let Ok(ref b) = a {
+            println!("{:?}", &b.bytes());
+        }
+        println!(
+            "s:{:?} bytes {:?} {} parse {:?}",
+            &s,
+            &s.bytes(),
+            s.len(),
+            &a
+        );
+        assert!(a.unwrap() == *r###"中文"###); // 78 45 101 135
     }
+
+    #[test]
+    fn f_c_string_9() {
+        let s = r###""日本語""###;
+        let a = miout::TokCStringParser::new().parse(s);
+        if let Ok(ref b) = a {
+            println!("{:?}", &b.bytes());
+        }
+        println!(
+            "s:{:?} bytes {:?} {} parse {:?}",
+            &s,
+            &s.bytes(),
+            s.len(),
+            &a
+        );
+        assert!(a.unwrap() == *r###"日本語"###);
+    }
+    #[test]
+    fn f_c_string_10() {
+        let s = r###""ελληνικά""###;
+        let a = miout::TokCStringParser::new().parse(s);
+        if let Ok(ref b) = a {
+            println!("{:?}", &b.bytes());
+        }
+        println!(
+            "s:{:?} bytes {:?} {} parse {:?}",
+            &s,
+            &s.bytes(),
+            s.len(),
+            &a
+        );
+        assert!(a.unwrap() == *r###"ελληνικά"###);
+    }
+    #[test]
+    fn f_c_string_11() {
+        let languages = [
+            r##""英语 - English""##,
+            r##""印地语 - हिन्दी""##,
+            r##""西班牙语 - Español""##,
+            r##""阿拉伯语 - العربية""##,
+            r##""孟加拉语 - বাংলা""##,
+            r##""法语 - Français""##,
+            r##""俄语 - Русский""##,
+            r##""葡萄牙语 - Português""##,
+            r##""乌尔都语 - اردو""##,
+            r##""印尼语 - Bahasa Indonesia""##,
+            r##""德语 - Deutsch""##,
+            r##""日语 - 日本語""##,
+            r##""斯瓦希里语 - Kiswahili""##,
+            r##""泰卢固语 - తెలుగు""##,
+            r##""马拉地语 - मराठी""##,
+            r##""泰米尔语 - தமிழ்""##,
+            r##""土耳其语 - Türkçe""##,
+            r##""越南语 - Tiếng Việt""##,
+            r##""韩语 - 한국어""##,
+            r##""意大利语 - Italiano""##,
+            r##""泰语 - ภาษาไทย""##,
+            r##""古吉拉特语 - ગુજરાતી""##,
+            r##""波斯语 - فارسی""##,
+            r##""波兰语 - Polski""##,
+            r##""旁遮普语 - ਪੰਜਾਬੀ""##,
+            r##""乌克兰语 - Українська""##,
+            r##""马来语 - Bahasa Melayu""##,
+            r##""荷兰语 - Nederlands""##,
+            r##""菲律宾语 - Filipino""##,
+            r##""缅甸语 - မြန်မာဘာသာ""##,
+            r##""僧伽罗语 - සිංහල""##,
+            r##""高棉语 - ភាសាខ្មែរ""##,
+            r##""普什图语 - پښتو""##,
+            r##""豪萨语 - Hausa""##,
+            r##""约鲁巴语 - Yorùbá""##,
+            r##""伊博语 - Igbo""##,
+        ];
+        languages.iter().for_each(|s| {
+            let a = miout::TokCStringParser::new().parse(s);
+            if let Ok(ref b) = a {
+                println!("{:?}", &b.bytes());
+            }
+            println!(
+                "s:{:?} bytes {:?} {} parse {:?}",
+                &s,
+                &s.bytes(),
+                s.len(),
+                &a
+            );
+            assert!(a.unwrap() == s[1..s.len() - 1]);
+        })
+    }
+    #[test]
+    fn f_c_string_12() {
+        let s = r###""this is a 中文 in 文章""###;
+        let a = miout::TokCStringParser::new().parse(s);
+        assert!(a.unwrap() == *r###"this is a 中文 in 文章"###);
+    }
+
+    #[test]
+    fn f_c_string_13() {
+        let s = "\"\t\r\n\"";
+        let a = miout::TokCStringParser::new().parse(s);
+        assert!(a.unwrap() == *"\t\r\n");
+    }
+
+    #[test]
+    fn f_c_string_14() {
+        let s = "\"¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ\"";
+        let a = miout::TokCStringParser::new().parse(s);
+        assert!(a.unwrap() == s[1..s.len() - 1]);
+    }
+
     #[test]
     fn f_tok_value_const() {
         let a = miout::TokValueParser::new().parse("\"/lib64/libexpat.so.1\"");
@@ -315,7 +431,8 @@ mod tests {
     #[test]
     fn f_to_k_async_output_type() {
         let a = miout::TokOutOfBandRecordParser::new()
-        .parse(r##"=stopped,reason="end-stepping-range",frame={addr="0x00000000004006ff",func="main",args=[],file="a.c",fullname="/home/shizhilvren/c++/a.c",line="27"},thread-id="1",stopped-threads="all",core="6""##);
+        .parse(r##"=stopped,reason="end-stepping-range",frame={addr="0x00000000004006ff",func="main",args=[],file="a.c",fullname="/home/shizhilvren/c++/a.c",line="27"},thread-id="1",stopped-threads="all",core="6"
+"##);
         println!("{:?}", &a);
         assert!(
             a.unwrap()
@@ -382,7 +499,7 @@ mod tests {
 
     #[test]
     fn f_to_k_async_output_type_1() {
-        let a = miout::TokOutOfBandRecordParser::new().parse(r##"=stopped,arch="i386:x86-64""##);
+        let a = miout::TokOutOfBandRecordParser::new().parse("=stopped,arch=\"i386:x86-64\"\n");
         println!("{:?}", &a);
         assert!(
             a.unwrap()
@@ -464,7 +581,7 @@ mod tests {
 
     #[test]
     fn f_tok_exec_async_output_type() {
-        let a = miout::TokOutOfBandRecordParser::new().parse(r##"*running,thread-id="1""##);
+        let a = miout::TokOutOfBandRecordParser::new().parse("*running,thread-id=\"1\"\r\n");
         println!("{:?}", &a);
         assert!(
             a.unwrap()
