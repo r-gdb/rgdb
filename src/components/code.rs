@@ -27,6 +27,7 @@ pub struct Code {
     file_need_show: Option<(String, u64)>,
     vertical_scroll_state: ScrollbarState,
     vertical_scroll: usize,
+    area: Rect,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
@@ -245,6 +246,11 @@ impl Code {
             _ => None,
         }
     }
+    fn set_area(&mut self, area: &layout::Size) {
+        let area = Rect::new(0, 0, area.width, area.height);
+        let [area, _, _] = tool::get_layout(area);
+        self.area = area;
+    }
     fn file_down(&mut self, n: usize) {
         self.vertical_scroll = self.vertical_scroll.saturating_add(n);
     }
@@ -422,7 +428,8 @@ impl Code {
 }
 
 impl Component for Code {
-    fn init(&mut self, _area: Size) -> Result<()> {
+    fn init(&mut self, area: Size) -> Result<()> {
+        self.set_area(&area);
         Ok(())
     }
     fn register_action_handler(&mut self, tx: UnboundedSender<action::Action>) -> Result<()> {
@@ -439,13 +446,18 @@ impl Component for Code {
         mouse: crossterm::event::MouseEvent,
     ) -> Result<Option<action::Action>> {
         // debug!("gen mouseEvent {:?}", &mouse);
+        let is_in = self
+            .area
+            .contains(ratatui::layout::Position::new(mouse.column, mouse.row));
         match mouse.kind {
-            crossterm::event::MouseEventKind::ScrollUp => {
-                Ok(Some(action::Action::Code(Action::Up(3))))
-            }
-            crossterm::event::MouseEventKind::ScrollDown => {
-                Ok(Some(action::Action::Code(Action::Down(3))))
-            }
+            crossterm::event::MouseEventKind::ScrollUp => match is_in {
+                true => Ok(Some(action::Action::Code(Action::Up(3)))),
+                false => Ok(None),
+            },
+            crossterm::event::MouseEventKind::ScrollDown => match is_in {
+                true => Ok(Some(action::Action::Code(Action::Down(3)))),
+                false => Ok(None),
+            },
             _ => Ok(None),
         }
     }
