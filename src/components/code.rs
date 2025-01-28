@@ -301,6 +301,7 @@ impl Code {
         self.draw_id(frame, start_line, end_line, line_id, area_ids);
         self.draw_split(frame, &line_id_start_0, mark_as_id, area_split);
         self.draw_status(frame, n, file_name, area_status);
+        self.draw_scroll(frame, area_src, n);
     }
     fn draw_src(
         &mut self,
@@ -312,11 +313,6 @@ impl Code {
         area_src: Rect,
     ) -> bool {
         let mut mark_as_id = true;
-        let block_src = Block::new()
-            .borders(Borders::RIGHT)
-            .style(Style::default())
-            // .title(title)
-            .title_alignment(Alignment::Center);
 
         // let empty_vec: (Vec<Vec<(_, _)>>, Vec<_>) = (vec![], vec![]);
         let (src, src_str) = match self.files_set.get(&SrcFileData::new(file_name.clone())) {
@@ -372,15 +368,15 @@ impl Code {
 
         frame.render_widget(paragraph_src, area_src);
         frame.render_widget(paragraph_pointer, area_src);
-        frame.render_widget(block_src, area_src);
-        let scrollbar =
-            Scrollbar::new(ScrollbarOrientation::VerticalRight).symbols(scrollbar::VERTICAL);
-        frame.render_stateful_widget(scrollbar, area_src, &mut self.vertical_scroll_state);
         mark_as_id
     }
     fn draw_status(&mut self, frame: &mut Frame, n: usize, file_name: String, area_status: Rect) {
-        let title = format!("{} cmd {}/{} ", &file_name, self.vertical_scroll, n);
-        let paragraph_status = Paragraph::new(title).fg(Color::Black).bg(Color::White);
+        let title = format!("{}", &file_name);
+        let scroll_x = file_name.len().saturating_sub(self.area.width as usize) as u16;
+        let paragraph_status = Paragraph::new(title)
+            .fg(Color::Black)
+            .bg(Color::White)
+            .scroll((0, scroll_x));
         frame.render_widget(paragraph_status, area_status);
     }
     fn draw_id(
@@ -424,6 +420,17 @@ impl Code {
         );
         let paragraph_split = Paragraph::new(test_split);
         frame.render_widget(paragraph_split, area_split);
+    }
+    fn draw_scroll(&mut self, frame: &mut Frame, area_src: Rect, text_len: usize) {
+        let hight = area_src.height as usize;
+        let up_half = hight.div_euclid(2);
+        let scrollbar =
+            Scrollbar::new(ScrollbarOrientation::VerticalRight).symbols(scrollbar::VERTICAL);
+        self.vertical_scroll_state = self
+            .vertical_scroll_state
+            .content_length(text_len.saturating_sub(hight))
+            .position(self.vertical_scroll.saturating_sub(up_half));
+        frame.render_stateful_widget(scrollbar, area_src, &mut self.vertical_scroll_state);
     }
 }
 

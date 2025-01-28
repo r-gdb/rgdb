@@ -7,6 +7,7 @@ use ratatui::{prelude::*, widgets::*};
 use symbols::scrollbar;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
+use tracing_subscriber::fmt::format::Full;
 // use tracing::debug;
 use crate::tool;
 use serde::{Deserialize, Serialize};
@@ -71,16 +72,56 @@ impl Home {
         let [_, _, area] = tool::get_layout(area);
         let in_size = area
             .inner(Margin {
-                vertical: 1,
+                vertical: 0,
                 horizontal: 1,
             })
             .as_size();
-        // self.vt100_parser.set_size(in_size.height, in_size.width);
         debug!("start resize {}", self.vt100_parser_buffer.len());
         self.vt100_parser = vt100::Parser::new(in_size.height, in_size.width, usize::MAX);
         self.vt100_parser
             .process(self.vt100_parser_buffer.as_slice());
         debug!("end resize {}", self.vt100_parser_buffer.len());
+    }
+    fn set_scroll_bar_status(&mut self, test_len: usize) {
+        self.vertical_scroll = self.vertical_scroll.min(test_len);
+        self.vertical_scroll_state = self.vertical_scroll_state.content_length(test_len);
+        self.vertical_scroll_state = self
+            .vertical_scroll_state
+            .position(test_len - self.vertical_scroll);
+    }
+    fn draw_cmd(&mut self, frame: &mut Frame, area: Rect) {
+        self.vt100_parser.set_scrollback(self.vertical_scroll);
+        let screen = self.vt100_parser.screen();
+        let cursor_show = self.vertical_scroll == 0;
+        let pseudo_term = PseudoTerminal::new(screen)
+            .cursor(tui_term::widget::Cursor::default().visibility(cursor_show))
+            .style(
+                Style::default()
+                    .fg(Color::White)
+                    .bg(Color::Black)
+                    .add_modifier(Modifier::BOLD),
+            );
+
+        frame.render_widget(pseudo_term, area);
+
+        // debug!("end one draw");
+    }
+    fn draw_scroll(&mut self, frame: &mut Frame, area: Rect, test_len: usize) {
+        let [area_in, _] =
+            Layout::horizontal(vec![Constraint::Fill(1), Constraint::Length(1)]).areas(area);
+        let text_scroll_status = match self.vertical_scroll {
+            0 => String::new(),
+            _ => format!("[{}/{}]", test_len - self.vertical_scroll, test_len),
+        };
+        let scroll_block = Block::default().title(
+            Line::from(text_scroll_status)
+                .right_aligned()
+                .fg(Color::White),
+        );
+        let scrollbar =
+            Scrollbar::new(ScrollbarOrientation::VerticalRight).symbols(scrollbar::VERTICAL);
+        frame.render_widget(scroll_block, area_in);
+        frame.render_stateful_widget(scrollbar, area, &mut self.vertical_scroll_state);
     }
 }
 
@@ -165,37 +206,10 @@ impl Component for Home {
         }
         let [_, _, area] = tool::get_layout(area);
         let n = self.get_text_hight(&area);
-        self.vertical_scroll = self.vertical_scroll.min(n);
-        self.vertical_scroll_state = self.vertical_scroll_state.content_length(n);
-        self.vertical_scroll_state = self
-            .vertical_scroll_state
-            .position(n - self.vertical_scroll);
-        self.vt100_parser.set_scrollback(self.vertical_scroll);
-        let screen = self.vt100_parser.screen();
-        let cursor_show = self.vertical_scroll == 0;
-        // self.vt100_parser.set_scrollback(2);
-        let title = format!(
-            "gdb cmd {}/{} {} area size {:?}",
-            n - self.vertical_scroll,
-            n,
-            screen.scrollback(),
-            screen.size()
-        );
-        let pseudo_term = PseudoTerminal::new(screen)
-            .block(Block::default().title(title).borders(Borders::ALL))
-            .cursor(tui_term::widget::Cursor::default().visibility(cursor_show))
-            .style(
-                Style::default()
-                    .fg(Color::White)
-                    .bg(Color::Black)
-                    .add_modifier(Modifier::BOLD),
-            );
+        self.set_scroll_bar_status(n);
+        self.draw_cmd(frame, area.clone());
+        self.draw_scroll(frame, area.clone(), n);
 
-        frame.render_widget(pseudo_term, area);
-        let scrollbar =
-            Scrollbar::new(ScrollbarOrientation::VerticalRight).symbols(scrollbar::VERTICAL);
-        frame.render_stateful_widget(scrollbar, area, &mut self.vertical_scroll_state);
-        // debug!("end one draw");
         Ok(())
     }
 }
