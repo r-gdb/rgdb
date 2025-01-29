@@ -38,9 +38,20 @@ pub enum Action {
     Start(String),
     SetGdb(String),
     SetGdbArgs(Vec<String>),
+    GdbExit,
 }
 
 impl Gdbtty {
+    fn is_gdb_exit(&mut self) -> bool {
+        let ans = self
+            .gdb_process
+            .as_mut()
+            .map_or(false, |p| match p.try_wait() {
+                std::result::Result::Ok(Some(_)) => true,
+                _ => false,
+            });
+        ans
+    }
     fn set_gdb_path(&mut self, path: String) {
         self.gdb_path = path;
     }
@@ -247,18 +258,27 @@ impl Component for Gdbtty {
     }
 
     fn update(&mut self, action: action::Action) -> Result<Option<action::Action>> {
-        if let Some(t) = &self.gdb_read_task {
-            if t.is_finished() {
-                error!("gdb task finish!");
-            };
-        }
-        match action {
-            action::Action::Gdbtty(Action::SetGdb(path)) => self.set_gdb_path(path),
-            action::Action::Gdbtty(Action::SetGdbArgs(args)) => self.set_gdb_args(args),
-            action::Action::Gdbtty(Action::Start(pts_path)) => self.gdbtty_start(pts_path)?,
-            _ => {}
-        }
-        Ok(None)
+        let ans = match action {
+            action::Action::Gdbtty(Action::SetGdb(path)) => {
+                self.set_gdb_path(path);
+                None
+            }
+            action::Action::Gdbtty(Action::SetGdbArgs(args)) => {
+                self.set_gdb_args(args);
+                None
+            }
+            action::Action::Gdbtty(Action::Start(pts_path)) => {
+                self.gdbtty_start(pts_path)?;
+                None
+            }
+            action::Action::Tick => match self.is_gdb_exit() {
+                true => Some(action::Action::Gdbtty(Action::GdbExit)),
+                false => None,
+            },
+            action::Action::Gdbtty(Action::GdbExit) => Some(action::Action::Quit),
+            _ => None,
+        };
+        Ok(ans)
     }
     fn init(&mut self, _area: Size) -> Result<()> {
         Ok(())
