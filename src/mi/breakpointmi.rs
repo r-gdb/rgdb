@@ -11,21 +11,59 @@ lalrpop_mod!(
 );
 use crate::mi::token::*;
 
-#[derive(Debug, Clone, Eq, Serialize, Deserialize)]
-pub struct Bkpt {
-    pub number: u64,
+#[derive(Debug, Clone, Serialize, Eq, Deserialize)]
+pub struct BreakPointMultipleData {
+    pub number: String,
     pub enabled: bool,
-    pub fullnmae: String,
+    pub bps: Vec<BreakPointSignalData>,
+}
+
+#[derive(Debug, Clone, Serialize, Eq, Deserialize)]
+pub struct BreakPointSignalData {
+    pub number: String,
+    pub enabled: bool,
+    pub fullname: String,
     pub line: u64,
 }
 
-impl Hash for Bkpt {
+#[derive(Debug, Clone, Hash, Eq, Serialize, Deserialize)]
+pub enum BreakPointData {
+    Signal(BreakPointSignalData),
+    Multiple(BreakPointMultipleData),
+}
+
+impl Hash for BreakPointMultipleData {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.number.hash(state);
+    }
+}
+impl Hash for BreakPointSignalData {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.number.hash(state);
     }
 }
 
-impl PartialEq for Bkpt {
+impl PartialEq for BreakPointData {
+    fn eq(&self, other: &Self) -> bool {
+        let a_number = match self {
+            Self::Signal(b) => b.number.clone(),
+            Self::Multiple(b) => b.number.clone(),
+        };
+        let b_number = match other {
+            Self::Signal(b) => b.number.clone(),
+            Self::Multiple(b) => b.number.clone(),
+        };
+        a_number == b_number
+    }
+}
+
+impl PartialEq for BreakPointSignalData {
+    fn eq(&self, other: &Self) -> bool {
+        self.number == other.number
+    }
+}
+
+impl PartialEq for BreakPointMultipleData {
     fn eq(&self, other: &Self) -> bool {
         self.number == other.number
     }
@@ -57,69 +95,151 @@ pub fn show_breakpoint_deleted(a: &OutOfBandRecordType) -> Option<u64> {
     ret
 }
 
-pub fn show_bkpt(a: &OutOfBandRecordType) -> Option<Bkpt> {
-    let get_from_bkpt = |r: &ResultType| -> Option<Bkpt> {
-        let mut file = None;
-        let mut line = None;
-        let mut number = None;
-        let mut enabled = None;
-        if r.variable.as_str() == "bkpt" {
-            if let ValueType::Tuple(Tuple::Results(rs)) = &r.value {
-                rs.iter().for_each(|r| match r.variable.as_str() {
-                    "fullname" => {
-                        if let ValueType::Const(f) = &r.value {
-                            file = Some(f.clone())
-                        }
-                    }
-                    "line" => {
-                        if let ValueType::Const(l) = &r.value {
-                            if let std::result::Result::Ok(l) = l.parse::<u64>() {
-                                line = Some(l)
-                            }
-                        }
-                    }
-                    "number" => {
-                        if let ValueType::Const(l) = &r.value {
-                            if let std::result::Result::Ok(l) = l.parse::<u64>() {
-                                number = Some(l)
-                            }
-                        }
-                    }
-                    "enabled" => {
-                        enabled = match &r.value {
-                            ValueType::Const(v) => match v.as_str() {
-                                "y" => Some(true),
-                                "n" => Some(false),
-                                _ => None,
-                            },
-                            _ => None,
-                        };
-                    }
-                    _ => {}
-                });
+fn get_from_signal_point(v: &ValueType) -> Option<BreakPointSignalData> {
+    let mut file = None;
+    let mut line = None;
+    let mut number = None;
+    let mut enabled = None;
+    if let ValueType::Tuple(Tuple::Results(rs)) = v {
+        rs.iter().for_each(|r| match r.variable.as_str() {
+            "fullname" => {
+                if let ValueType::Const(f) = &r.value {
+                    file = Some(f.clone())
+                }
             }
-        }
-        match (file, line, number, enabled) {
-            (Some(file), Some(line), Some(number), Some(enabled)) => Some(Bkpt {
-                number: number,
-                enabled: enabled,
-                fullnmae: file,
-                line: line,
-            }),
-            _ => None,
-        }
-    };
+            "line" => {
+                if let ValueType::Const(l) = &r.value {
+                    if let std::result::Result::Ok(l) = l.parse::<u64>() {
+                        line = Some(l)
+                    }
+                }
+            }
+            "number" => {
+                if let ValueType::Const(l) = &r.value {
+                    number = Some(l)
+                }
+            }
+            "enabled" => {
+                enabled = match &r.value {
+                    ValueType::Const(v) => match v.as_str() {
+                        "y" => Some(true),
+                        "n" => Some(false),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+            }
+            _ => {}
+        });
+    }
+    match (file, line, number, enabled) {
+        (Some(file), Some(line), Some(number), Some(enabled)) => Some(BreakPointSignalData {
+            number: number.clone(),
+            enabled: enabled,
+            fullname: file,
+            line: line,
+        }),
+        _ => None,
+    }
+}
 
+fn get_from_bkpt(r: &ResultType) -> Option<BreakPointData> {
+    let mut file = None;
+    let mut line = None;
+    let mut number = None;
+    let mut enabled = None;
+    let mut multiple = false;
+    let mut bps = vec![];
+    if r.variable.as_str() == "bkpt" {
+        if let ValueType::Tuple(Tuple::Results(rs)) = &r.value {
+            rs.iter().for_each(|r| match r.variable.as_str() {
+                "fullname" => {
+                    if let ValueType::Const(f) = &r.value {
+                        file = Some(f.clone())
+                    }
+                }
+                "line" => {
+                    if let ValueType::Const(l) = &r.value {
+                        if let std::result::Result::Ok(l) = l.parse::<u64>() {
+                            line = Some(l)
+                        }
+                    }
+                }
+                "number" => {
+                    if let ValueType::Const(l) = &r.value {
+                        number = Some(l)
+                    }
+                }
+                "enabled" => {
+                    enabled = match &r.value {
+                        ValueType::Const(v) => match v.as_str() {
+                            "y" => Some(true),
+                            "n" => Some(false),
+                            _ => None,
+                        },
+                        _ => None,
+                    };
+                }
+                "addr" => {
+                    if let ValueType::Const(l) = &r.value {
+                        if l == "<MULTIPLE>" {
+                            multiple = true
+                        }
+                    }
+                }
+                // for mi3 and upper
+                "locations" => {
+                    if let ValueType::List(List::ValueList(list)) = &r.value {
+                        list.iter().for_each(|v| {
+                            if let Some(p) = get_from_signal_point(v) {
+                                bps.push(p);
+                            }
+                        })
+                    }
+                }
+                _ => {}
+            });
+        }
+    }
+    match (file, line, number, enabled, multiple) {
+        (Some(file), Some(line), Some(number), Some(enabled), false) => {
+            Some(BreakPointData::Signal(BreakPointSignalData {
+                number: number.clone(),
+                enabled: enabled,
+                fullname: file,
+                line: line,
+            }))
+        }
+        (None, None, Some(number), Some(enabled), true) => {
+            Some(BreakPointData::Multiple(BreakPointMultipleData {
+                number: number.clone(),
+                enabled: enabled,
+                bps: bps,
+            }))
+        }
+        _ => None,
+    }
+}
+
+pub fn show_bkpt(a: &OutOfBandRecordType) -> Option<BreakPointData> {
     let mut ret = None;
     let OutOfBandRecordType::AsyncRecord(a) = a;
     match a {
         AsyncRecordType::NotifyAsyncOutput(a) => match a.async_output.async_class {
-            AsyncClassType::BreakpointCreated => a.async_output.resaults.iter().for_each(|r| {
-                ret = get_from_bkpt(r);
-            }),
-            AsyncClassType::BreakpointModified => a.async_output.resaults.iter().for_each(|r| {
-                ret = get_from_bkpt(r);
-            }),
+            AsyncClassType::BreakpointCreated | AsyncClassType::BreakpointModified => {
+                a.async_output.resaults.iter().for_each(|r| {
+                    ret = get_from_bkpt(r);
+                });
+
+                if let Some(BreakPointData::Multiple(bp)) = ret.as_mut() {
+                    // for mi2
+                    a.async_output.values.iter().for_each(|v| {
+                        if let Some(p) = get_from_signal_point(v) {
+                            bp.bps.push(p);
+                        }
+                    });
+                };
+            }
             _ => {}
         },
         _ => {}
@@ -137,6 +257,7 @@ fn f_breakpoint_created() {
                 NotifyAsyncOutputType {
                     async_output: AsyncOutputType {
                         async_class: AsyncClassType::BreakpointCreated,
+                        values: vec![],
                         resaults: vec![ResultType {
                             variable: "bkpt".to_string(),
                             value: ValueType::Tuple(Tuple::Results(vec![
@@ -209,6 +330,7 @@ fn f_breakpoint_modified() {
                 NotifyAsyncOutputType {
                     async_output: AsyncOutputType {
                         async_class: AsyncClassType::BreakpointModified,
+                        values: vec![],
                         resaults: vec![ResultType {
                             variable: "bkpt".to_string(),
                             value: ValueType::Tuple(Tuple::None),
@@ -228,6 +350,7 @@ fn f_breakpoint_deleted() {
                 NotifyAsyncOutputType {
                     async_output: AsyncOutputType {
                         async_class: AsyncClassType::BreakpointDeleted,
+                        values: vec![],
                         resaults: vec![ResultType {
                             variable: "id".to_string(),
                             value: ValueType::Const("1".to_string()),
@@ -243,12 +366,12 @@ fn f_breakpoint_created_2() {
     let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-created,bkpt={number=\"1\",type=\"breakpoint\",disp=\"del\",enabled=\"y\",addr=\"0x0000000000404570\",func=\"main\",file=\"tmux.c\",fullname=\"/home/shizhilvren/tmux/tmux.c\",line=\"355\",thread-groups=[\"i1\"],times=\"0\",original-location=\"main\"}\n" );
     let bkpt = show_bkpt(&a.unwrap());
     assert!(
-        bkpt == Some(Bkpt {
-            number: 1_u64,
+        bkpt == Some(BreakPointData::Signal(BreakPointSignalData {
+            number: "1".to_string(),
             enabled: true,
-            fullnmae: "/home/shizhilvren/tmux/tmux.c".to_string(),
+            fullname: "/home/shizhilvren/tmux/tmux.c".to_string(),
             line: 355_u64,
-        })
+        }))
     );
 }
 
@@ -257,12 +380,12 @@ fn f_breakpoint_modified_2() {
     let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-modified,bkpt={number=\"2\",type=\"breakpoint\",disp=\"keep\",enabled=\"n\",addr=\"0x0000000000404570\",func=\"main\",file=\"tmux.c\",fullname=\"/home/shizhilvren/tmux/tmux.c\",line=\"355\",thread-groups=[\"i1\"],cond=\"1==2\",times=\"0\",original-location=\"main\"}\n"  );
     let bkpt = show_bkpt(&a.unwrap());
     assert!(
-        bkpt == Some(Bkpt {
-            number: 2_u64,
+        bkpt == Some(BreakPointData::Signal(BreakPointSignalData {
+            number: "2".to_string(),
             enabled: false,
-            fullnmae: "/home/shizhilvren/tmux/tmux.c".to_string(),
+            fullname: "/home/shizhilvren/tmux/tmux.c".to_string(),
             line: 355_u64,
-        })
+        }))
     );
 }
 
@@ -271,4 +394,95 @@ fn f_breakpoint_deleted_2() {
     let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-deleted,id=\"11\"\n");
     let bkpt = show_breakpoint_deleted(&a.unwrap());
     assert!(bkpt == Some(11_u64));
+}
+
+#[test]
+fn f_breakpoint_modified_3() {
+    let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-modified,bkpt={number=\"5\",type=\"breakpoint\",disp=\"keep\",enabled=\"n\",addr=\"<MULTIPLE>\",times=\"3\",original-location=\"/home/shizhilvren/tmux/environ.c:1\"},\
+{number=\"5.1\",enabled=\"y\",addr=\"0x0000000000426d70\",func=\"environ_RB_INSERT\",file=\"environ.c\",fullname=\"/home/shizhilvren/tmux/environ.c\",line=\"34\",thread-groups=[\"i1\"]},\
+{number=\"5.2\",enabled=\"n\",addr=\"0x0000000000427c61\",func=\"environ_RB_MINMAX\",file=\"environ.c\",fullname=\"/home/shizhilvren/tmux/environ.c\",line=\"34\",thread-groups=[\"i1\"]}\n"  );
+    let bkpt = show_bkpt(&a.unwrap());
+    println!("{:?}", &bkpt);
+
+    assert!(
+        bkpt == Some(BreakPointData::Multiple(BreakPointMultipleData {
+            number: "5".to_string(),
+            enabled: false,
+            bps: vec![
+                BreakPointSignalData {
+                    number: "5.1".to_string(),
+                    enabled: true,
+                    line: 34_u64,
+                    fullname: "/home/shizhilvren/tmux/environ.c".to_string()
+                },
+                BreakPointSignalData {
+                    number: "5.1".to_string(),
+                    enabled: false,
+                    line: 34_u64,
+                    fullname: "/home/shizhilvren/tmux/environ.c".to_string()
+                },
+            ]
+        }))
+    );
+}
+
+#[test]
+fn f_breakpoint_modified_4() {
+    let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-modified,\
+    bkpt={number=\"2\",type=\"breakpoint\",disp=\"keep\",enabled=\"n\",addr=\"<MULTIPLE>\",times=\"2\",original-location=\"environ.c:34\",\
+    locations=[\
+    {number=\"2.1\",enabled=\"y\",addr=\"0x0000000000426d70\",func=\"environ_RB_INSERT\",file=\"environ.c\",fullname=\"/home/shizhilvren/tmux/environ.c\",line=\"34\",thread-groups=[\"i1\"]},\
+    {number=\"2.8\",enabled=\"n\",addr=\"0x0000000000427c61\",func=\"environ_RB_MINMAX\",file=\"environ.c\",fullname=\"/home/shizhilvren/tmux/environ.c\",line=\"34\",thread-groups=[\"i1\"]}]}\n"  );
+    println!("{:?}", &a);
+    let bkpt = show_bkpt(&a.unwrap());
+    println!("{:?}", &bkpt);
+    assert!(
+        bkpt == Some(BreakPointData::Multiple(BreakPointMultipleData {
+            number: "2".to_string(),
+            enabled: false,
+            bps: vec![
+                BreakPointSignalData {
+                    number: "2.1".to_string(),
+                    enabled: true,
+                    line: 34_u64,
+                    fullname: "/home/shizhilvren/tmux/environ.c".to_string()
+                },
+                BreakPointSignalData {
+                    number: "2.8".to_string(),
+                    enabled: false,
+                    line: 34_u64,
+                    fullname: "/home/shizhilvren/tmux/environ.c".to_string()
+                },
+            ]
+        }))
+    );
+}
+
+#[test]
+fn f_breakpoint() {
+    let a = BreakPointData::Multiple(BreakPointMultipleData {
+        number: "5".to_string(),
+        enabled: false,
+        bps: vec![
+            BreakPointSignalData {
+                number: "5.1".to_string(),
+                enabled: true,
+                line: 34_u64,
+                fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+            },
+            BreakPointSignalData {
+                number: "5.1".to_string(),
+                enabled: false,
+                line: 34_u64,
+                fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+            },
+        ],
+    });
+    let b = BreakPointData::Signal(BreakPointSignalData {
+        number: "5".to_string(),
+        enabled: true,
+        line: 34_u64,
+        fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+    });
+    assert!(a == b);
 }

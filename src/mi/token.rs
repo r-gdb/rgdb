@@ -38,6 +38,7 @@ pub struct NotifyAsyncOutputType {
 pub struct AsyncOutputType {
     pub async_class: AsyncClassType,
     pub resaults: Vec<ResultType>,
+    pub values: Vec<ValueType>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -443,6 +444,7 @@ mod tests {
                     NotifyAsyncOutputType {
                         async_output: AsyncOutputType {
                             async_class: AsyncClassType::Stopped,
+                            values: vec![],
                             resaults: vec![
                                 ResultType {
                                     variable: "reason".to_string(),
@@ -510,6 +512,7 @@ mod tests {
                     NotifyAsyncOutputType {
                         async_output: AsyncOutputType {
                             async_class: AsyncClassType::Stopped,
+                            values: vec![],
                             resaults: vec![ResultType {
                                 variable: "arch".to_string(),
                                 value: ValueType::Const("i386:x86-64".to_string()),
@@ -529,6 +532,7 @@ mod tests {
                     NotifyAsyncOutputType {
                         async_output: AsyncOutputType {
                             async_class: AsyncClassType::ThreadSelected,
+                            values: vec![],
                             resaults: vec![
                                 ResultType {
                                     variable: "id".to_string(),
@@ -592,6 +596,7 @@ mod tests {
                     ExecAsyncOutputType {
                         async_output: AsyncOutputType {
                             async_class: AsyncClassType::Running,
+                            values: vec![],
                             resaults: vec![ResultType {
                                 variable: "thread-id".to_string(),
                                 value: ValueType::Const("1".to_string()),

@@ -98,7 +98,7 @@ impl Gdbtty {
                 pixel_height: 0,
             })
             .map_err(|e| eyre!(format!("{:?}", e)))?;
-        let s = format!("new-ui mi {}", pts_path.as_str());
+        let s = format!("new-ui mi3 {}", pts_path.as_str());
         let gdb_args = self.gdb_args.iter().map(|s| s.as_str());
         let args = [self.gdb_path.as_str(), "--nw", "--ex", s.as_str()]
             .iter()

@@ -1,6 +1,6 @@
 use super::Component;
 use crate::components::gdbmi;
-use crate::mi::breakpointmi::Bkpt;
+use crate::mi::breakpointmi::{BreakPointData, BreakPointSignalData};
 use crate::tool;
 use crate::{action, config::Config};
 use color_eyre::{eyre::Ok, Result};
@@ -27,7 +27,7 @@ pub struct Code {
     config: Config,
 
     files_set: HashSet<SrcFileData>,
-    breakpoint_set: HashSet<Bkpt>,
+    breakpoint_set: HashSet<BreakPointData>,
     file_need_show: Option<(String, u64)>,
     vertical_scroll_state: ScrollbarState,
     vertical_scroll: usize,
@@ -285,13 +285,27 @@ impl Code {
         let ans = self
             .breakpoint_set
             .iter()
-            .filter(|bkpt| {
-                bkpt.fullnmae == *file_name
-                    && start_line <= bkpt.line as usize
-                    && bkpt.line as usize <= end_line
+            .map(|b| match b {
+                BreakPointData::Signal(p) => {
+                    vec![(p.fullname.clone(), p.line, p.enabled)]
+                }
+                BreakPointData::Multiple(p) => p
+                    .bps
+                    .iter()
+                    .map(|bp| (bp.fullname.clone(), bp.line, bp.enabled && p.enabled))
+                    .collect::<Vec<_>>(),
             })
-            .map(|bkpt| (bkpt.line, bkpt.enabled))
-            .collect::<HashMap<_, _>>();
+            .flatten()
+            .filter(|(name, line, _)| {
+                name == file_name && start_line <= *line as usize && *line as usize <= end_line
+            })
+            .map(|(_, line, enable)| (line, enable))
+            .fold(HashMap::new(), |mut m, (line, enable)| {
+                m.entry(line)
+                    .and_modify(|enable_old| *enable_old |= enable)
+                    .or_insert(enable);
+                m
+            });
         ans
     }
     fn draw_all(
@@ -323,7 +337,7 @@ impl Code {
         self.draw_breakpoint(frame, &file_name, start_line, end_line, area_ids);
         self.draw_id(frame, start_line, end_line, line_id, area_ids);
         self.draw_split(frame, &line_id_start_0, mark_as_id, area_split);
-        self.draw_status(frame, n, file_name, area_status);
+        self.draw_status(frame, file_name, area_status);
         self.draw_scroll(frame, area_src, n);
     }
     fn draw_src(
@@ -393,7 +407,7 @@ impl Code {
         frame.render_widget(paragraph_pointer, area_src);
         mark_as_id
     }
-    fn draw_status(&mut self, frame: &mut Frame, n: usize, file_name: String, area_status: Rect) {
+    fn draw_status(&mut self, frame: &mut Frame, file_name: String, area_status: Rect) {
         let title = format!("{}", &file_name);
         let scroll_x = file_name.len().saturating_sub(self.area.width as usize) as u16;
         let paragraph_status = Paragraph::new(title)
@@ -557,12 +571,13 @@ impl Component for Code {
                 self.breakpoint_set.insert(bkpt);
             }
             action::Action::Gdbmi(gdbmi::Action::BreakpointDeleted(id)) => {
-                self.breakpoint_set.remove(&Bkpt {
-                    number: id,
-                    enabled: true,
-                    fullnmae: "".to_string(),
-                    line: 0_u64,
-                });
+                self.breakpoint_set
+                    .remove(&BreakPointData::Signal(BreakPointSignalData {
+                        number: id.to_string(),
+                        enabled: true,
+                        fullname: "".to_string(),
+                        line: 0_u64,
+                    }));
             }
             action::Action::Code(Action::FileReadOneLine((file, line))) => {
                 match self.files_set.take(&SrcFileData::new(file.clone())) {
@@ -793,4 +808,85 @@ fn test_file_range_2() {
     (50..62).zip(src.iter()).for_each(|(i, s)| {
         assert!(format!("{:?}\n", i) == **s);
     });
+}
+
+#[test]
+fn f_breakpoint_range() {
+    use crate::mi::breakpointmi::BreakPointMultipleData;
+    let a = BreakPointData::Multiple(BreakPointMultipleData {
+        number: "5".to_string(),
+        enabled: false,
+        bps: vec![
+            BreakPointSignalData {
+                number: "5.1".to_string(),
+                enabled: true,
+                line: 34_u64,
+                fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+            },
+            BreakPointSignalData {
+                number: "5.1".to_string(),
+                enabled: false,
+                line: 34_u64,
+                fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+            },
+        ],
+    });
+
+    let mut code = Code::new();
+    code.breakpoint_set.insert(a);
+    let ans =
+        code.get_breakpoint_in_file_range(&"/home/shizhilvren/tmux/environ.c".to_string(), 22, 39);
+    assert!(ans == HashMap::from([(34_u64, false)]));
+}
+
+#[test]
+fn f_breakpoint_range_2() {
+    use crate::mi::breakpointmi::BreakPointMultipleData;
+    let a = BreakPointData::Multiple(BreakPointMultipleData {
+        number: "5".to_string(),
+        enabled: true,
+        bps: vec![
+            BreakPointSignalData {
+                number: "5.1".to_string(),
+                enabled: true,
+                line: 34_u64,
+                fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+            },
+            BreakPointSignalData {
+                number: "5.1".to_string(),
+                enabled: false,
+                line: 34_u64,
+                fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+            },
+        ],
+    });
+
+    let mut code = Code::new();
+    code.breakpoint_set.insert(a);
+    let ans =
+        code.get_breakpoint_in_file_range(&"/home/shizhilvren/tmux/environ.c".to_string(), 22, 39);
+    assert!(ans == HashMap::from([(34_u64, true)]));
+}
+
+#[test]
+fn f_breakpoint_range_3() {
+    let a = BreakPointData::Signal(BreakPointSignalData {
+        number: "2".to_string(),
+        enabled: true,
+        line: 34_u64,
+        fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+    });
+    let b = BreakPointData::Signal(BreakPointSignalData {
+        number: "6".to_string(),
+        enabled: true,
+        line: 37_u64,
+        fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+    });
+
+    let mut code = Code::new();
+    code.breakpoint_set.insert(a);
+    code.breakpoint_set.insert(b);
+    let ans =
+        code.get_breakpoint_in_file_range(&"/home/shizhilvren/tmux/environ.c".to_string(), 22, 36);
+    assert!(ans == HashMap::from([(34_u64, true)]));
 }

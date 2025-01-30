@@ -19,7 +19,7 @@ lalrpop_mod!(
     miout,
     "/mi/miout.rs"
 );
-use crate::mi::breakpointmi::{show_bkpt, show_breakpoint_deleted, Bkpt};
+use crate::mi::breakpointmi::{show_bkpt, show_breakpoint_deleted, BreakPointData};
 use crate::mi::token::*;
 
 #[derive(Default)]
@@ -37,7 +37,7 @@ pub enum Action {
     Start,
     Out(String),
     ShowFile((String, u64)),
-    Breakpoint(Bkpt),
+    Breakpoint(BreakPointData),
     BreakpointDeleted(u64),
 }
 
@@ -275,4 +275,5 @@ mod tests {
         println!("{:?} {:?}", &a, &b);
         assert!(b == Some(("/remote/x/x/code/c++/args.c".to_string(), 7_u64)));
     }
+
 }

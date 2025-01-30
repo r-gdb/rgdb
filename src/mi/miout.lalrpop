@@ -32,10 +32,12 @@ pub TokNotifyAsyncOutput:NotifyAsyncOutputType = {
     <e:TokEq> <a:TokAsyncOutput> <c:TokNewLine> => NotifyAsyncOutputType{ async_output:a },
 } 
 
+// TokValue part for multiple breakpoint 
 pub TokAsyncOutput:AsyncOutputType = {
-    <e:TokAsyncClass> <v: (<TokComma> <TokResult>)* > => {
-        let v = v.into_iter().map(|(c, r)| r).collect::<Vec<ResultType>>();
-        AsyncOutputType{ async_class:e, resaults:v}
+    <e:TokAsyncClass> <v1: (<TokComma> <TokResult>)* > <v2: (<TokComma> <TokValue>)* > => {
+        let v1 = v1.into_iter().map(|(c, r)| r).collect::<Vec<ResultType>>();
+        let v2 = v2.into_iter().map(|(c, r)| r).collect::<Vec<ValueType>>();
+        AsyncOutputType{ async_class:e, resaults:v1, values:v2}
     },
 }
 
