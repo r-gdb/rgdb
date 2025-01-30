@@ -51,11 +51,34 @@ pub TokThreadSelected:AsyncClassType = {
     "t" "h" "r" "e" "a" "d" "-" "s" "e" "l" "e" "c" "t" "e" "d" =>AsyncClassType::ThreadSelected,
 }
 
+pub TokBreakpointCreated:AsyncClassType = {
+    "b" "r" "e" "a" "k" "p" "o" "i" "n" "t" "-" "c" "r" "e" "a" "t" "e" "d" => {
+        AsyncClassType::BreakpointCreated
+    },
+}
+
+pub TokBreakpointModified:AsyncClassType = {
+    "b" "r" "e" "a" "k" "p" "o" "i" "n" "t" "-" "m" "o" "d" "i" "f" "i" "e" "d" => {
+        AsyncClassType::BreakpointModified
+    },
+}
+
+pub TokBreakpointDeleted:AsyncClassType = {
+    "b" "r" "e" "a" "k" "p" "o" "i" "n" "t" "-" "d" "e" "l" "e" "t" "e" "d" => {
+        AsyncClassType::BreakpointDeleted
+    },
+}
+
+
+
 
 pub TokAsyncClass:AsyncClassType = {
     <s:TokStopped> => s,
     <s:TokRunning> => s,
     <s:TokThreadSelected> => s,
+    <s:TokBreakpointCreated> => s,
+    <s:TokBreakpointModified> => s,
+    <s:TokBreakpointDeleted> => s,
 }
 
 pub TokValue:ValueType = {

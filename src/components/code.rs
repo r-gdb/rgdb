@@ -1,10 +1,12 @@
 use super::Component;
 use crate::components::gdbmi;
+use crate::mi::breakpointmi::Bkpt;
 use crate::tool;
 use crate::{action, config::Config};
 use color_eyre::{eyre::Ok, Result};
 use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::hash::Hash;
@@ -15,6 +17,7 @@ use syntect::easy::HighlightLines;
 use syntect::parsing::SyntaxSet;
 use tokio::fs::File;
 use tokio::io::AsyncBufReadExt;
+
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
@@ -24,6 +27,7 @@ pub struct Code {
     config: Config,
 
     files_set: HashSet<SrcFileData>,
+    breakpoint_set: HashSet<Bkpt>,
     file_need_show: Option<(String, u64)>,
     vertical_scroll_state: ScrollbarState,
     vertical_scroll: usize,
@@ -32,7 +36,7 @@ pub struct Code {
 
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
 pub enum Action {
-    FileReadOutLine((String, String)),
+    FileReadOneLine((String, String)),
     FileReadEnd(String),
     FilehighlightLine((String, Vec<(ratatui::style::Color, String)>)),
     FilehighlightEnd(String),
@@ -204,7 +208,7 @@ impl Code {
                         }
                         std::result::Result::Ok(_n) => {
                             line = line.replace("\t", "    ");
-                            match send.send(action::Action::Code(Action::FileReadOutLine((
+                            match send.send(action::Action::Code(Action::FileReadOneLine((
                                 file.clone(),
                                 line,
                             )))) {
@@ -272,6 +276,24 @@ impl Code {
         let end = start.saturating_add(hight);
         (start, end)
     }
+    fn get_breakpoint_in_file_range(
+        &self,
+        file_name: &String,
+        start_line: usize,
+        end_line: usize,
+    ) -> HashMap<u64, bool> {
+        let ans = self
+            .breakpoint_set
+            .iter()
+            .filter(|bkpt| {
+                bkpt.fullnmae == *file_name
+                    && start_line <= bkpt.line as usize
+                    && bkpt.line as usize <= end_line
+            })
+            .map(|bkpt| (bkpt.line, bkpt.enabled))
+            .collect::<HashMap<_, _>>();
+        ans
+    }
     fn draw_all(
         &mut self,
         frame: &mut Frame,
@@ -298,6 +320,7 @@ impl Code {
             &line_id_start_0,
             area_src,
         );
+        self.draw_breakpoint(frame, &file_name, start_line, end_line, area_ids);
         self.draw_id(frame, start_line, end_line, line_id, area_ids);
         self.draw_split(frame, &line_id_start_0, mark_as_id, area_split);
         self.draw_status(frame, n, file_name, area_status);
@@ -395,6 +418,31 @@ impl Code {
                 line.style(Style::default().light_green())
             } else {
                 line
+            }
+        }));
+
+        let paragraph_id = Paragraph::new(text_ids).right_aligned();
+        frame.render_widget(paragraph_id, area_ids);
+    }
+    fn draw_breakpoint(
+        &mut self,
+        frame: &mut Frame,
+        file_name: &String,
+        start_line: usize,
+        end_line: usize,
+        area_ids: Rect,
+    ) {
+        let bp = self.get_breakpoint_in_file_range(file_name, start_line, end_line);
+        let ids: Vec<usize> = (start_line..end_line.saturating_add(1)).collect::<Vec<_>>();
+        let text_ids = Text::from_iter(ids.iter().map(|s| {
+            if let Some(enable) = bp.get(&(*s as u64)) {
+                let line = Line::from_iter(s.to_string().chars().map(|c| Span::raw(c.to_string())));
+                match enable {
+                    true => line.style(Style::default().fg(Color::Rgb(255, 0, 0))),
+                    false => line.style(Style::default().fg(Color::Rgb(255, 128, 0))), //orange
+                }
+            } else {
+                Line::from("")
             }
         }));
 
@@ -504,7 +552,19 @@ impl Component for Code {
                     }
                 }
             }
-            action::Action::Code(Action::FileReadOutLine((file, line))) => {
+            action::Action::Gdbmi(gdbmi::Action::Breakpoint(bkpt)) => {
+                self.breakpoint_set.remove(&bkpt);
+                self.breakpoint_set.insert(bkpt);
+            }
+            action::Action::Gdbmi(gdbmi::Action::BreakpointDeleted(id)) => {
+                self.breakpoint_set.remove(&Bkpt {
+                    number: id,
+                    enabled: true,
+                    fullnmae: "".to_string(),
+                    line: 0_u64,
+                });
+            }
+            action::Action::Code(Action::FileReadOneLine((file, line))) => {
                 match self.files_set.take(&SrcFileData::new(file.clone())) {
                     Some(mut file_data) => {
                         file_data.add_line(line);

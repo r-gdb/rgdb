@@ -19,6 +19,7 @@ lalrpop_mod!(
     miout,
     "/mi/miout.rs"
 );
+use crate::mi::breakpointmi::{show_bkpt, show_breakpoint_deleted, Bkpt};
 use crate::mi::token::*;
 
 #[derive(Default)]
@@ -36,6 +37,8 @@ pub enum Action {
     Start,
     Out(String),
     ShowFile((String, u64)),
+    Breakpoint(Bkpt),
+    BreakpointDeleted(u64),
 }
 
 impl Gdbmi {
@@ -83,6 +86,12 @@ impl Gdbmi {
                     std::result::Result::Ok(a) => {
                         if let Some(show) = show_file(&a) {
                             actions.push(Action::ShowFile(show));
+                        }
+                        if let Some(bkpt) = show_bkpt(&a) {
+                            actions.push(Action::Breakpoint(bkpt));
+                        }
+                        if let Some(id) = show_breakpoint_deleted(&a) {
+                            actions.push(Action::BreakpointDeleted(id));
                         }
                     }
                     std::result::Result::Err(e) => {

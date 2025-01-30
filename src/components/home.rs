@@ -7,7 +7,6 @@ use ratatui::{prelude::*, widgets::*};
 use symbols::scrollbar;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
-use tracing_subscriber::fmt::format::Full;
 // use tracing::debug;
 use crate::tool;
 use serde::{Deserialize, Serialize};

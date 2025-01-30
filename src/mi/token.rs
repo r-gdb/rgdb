@@ -45,6 +45,9 @@ pub enum AsyncClassType {
     Stopped,
     Running,
     ThreadSelected,
+    BreakpointCreated,
+    BreakpointModified,
+    BreakpointDeleted,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
