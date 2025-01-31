@@ -1,16 +1,15 @@
 use super::Component;
 use crate::components::gdbmi;
-use crate::mi::breakpointmi::{BreakPointData, BreakPointSignalData};
+use crate::mi::breakpointmi::{BreakPointAction, BreakPointMultipleAction, BreakPointSignalAction};
 use crate::tool;
 use crate::{action, config::Config};
 use color_eyre::{eyre::Ok, Result};
 use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::ffi::OsStr;
-use std::hash::Hash;
 use std::path::Path;
+use std::rc::Rc;
 use strum::Display;
 use symbols::scrollbar;
 use syntect::easy::HighlightLines;
@@ -26,8 +25,8 @@ pub struct Code {
     command_tx: Option<UnboundedSender<action::Action>>,
     config: Config,
 
-    files_set: HashSet<SrcFileData>,
-    breakpoint_set: HashSet<BreakPointData>,
+    files_set: HashMap<Rc<String>, SrcFileData>,
+    breakpoint_set: HashMap<Rc<String>, BreakPointData>,
     file_need_show: Option<(String, u64)>,
     vertical_scroll_state: ScrollbarState,
     vertical_scroll: usize,
@@ -44,25 +43,78 @@ pub enum Action {
     Down(usize),
 }
 
-#[derive(Clone, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct SrcFileData {
-    pub file_name: String,
+    pub file_name: Rc<String>,
     lines: Vec<String>,
     lines_highlight: Vec<Vec<(ratatui::style::Color, String)>>,
     read_done: bool,
     highlight_done: bool,
 }
 
-impl PartialEq for SrcFileData {
-    fn eq(&self, other: &Self) -> bool {
-        self.file_name == other.file_name
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BreakPointMultipleData {
+    pub number: Rc<String>,
+    pub enabled: bool,
+    pub bps: Vec<BreakPointSignalData>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BreakPointSignalData {
+    pub number: Rc<String>,
+    pub enabled: bool,
+    pub fullname: String,
+    pub line: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BreakPointData {
+    Signal(BreakPointSignalData),
+    Multiple(BreakPointMultipleData),
+}
+
+impl From<&BreakPointSignalAction> for BreakPointSignalData {
+    fn from(a: &BreakPointSignalAction) -> Self {
+        Self {
+            number: Rc::new(a.number.clone()),
+            enabled: a.enabled,
+            fullname: a.fullname.clone(),
+            line: a.line,
+        }
+    }
+}
+
+impl From<&BreakPointMultipleAction> for BreakPointMultipleData {
+    fn from(a: &BreakPointMultipleAction) -> Self {
+        Self {
+            number: Rc::new(a.number.clone()),
+            enabled: a.enabled,
+            bps: a.bps.iter().map(BreakPointSignalData::from).collect(),
+        }
+    }
+}
+
+impl From<&BreakPointAction> for BreakPointData {
+    fn from(a: &BreakPointAction) -> Self {
+        match a {
+            BreakPointAction::Signal(p) => Self::Signal(BreakPointSignalData::from(p)),
+            BreakPointAction::Multiple(p) => Self::Multiple(BreakPointMultipleData::from(p)),
+        }
+    }
+}
+impl BreakPointData {
+    fn get_key(&self) -> Rc<String> {
+        match self {
+            Self::Signal(p) => p.number.clone(),
+            Self::Multiple(p) => p.number.clone(),
+        }
     }
 }
 
 impl SrcFileData {
     pub fn new(file_name: String) -> Self {
         Self {
-            file_name,
+            file_name: Rc::new(file_name),
             lines: vec![],
             lines_highlight: vec![],
             read_done: false,
@@ -123,12 +175,6 @@ impl SrcFileData {
             start,
             end,
         )
-    }
-}
-
-impl Hash for SrcFileData {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.file_name.hash(state);
     }
 }
 
@@ -231,22 +277,20 @@ impl Code {
     }
     fn get_need_show_file(&self) -> Option<(&SrcFileData, u64)> {
         match self.file_need_show {
-            Some((ref file, line_id)) => {
-                match self.files_set.get(&SrcFileData::new(file.clone())) {
-                    Some(file_data) => {
-                        if file_data.get_read_done() {
-                            Some((file_data, line_id))
-                        } else {
-                            info!("file {} not read done", &file);
-                            None
-                        }
-                    }
-                    _ => {
-                        error!("file {} not found", &file);
+            Some((ref file, line_id)) => match self.files_set.get(&Rc::new(file.clone())) {
+                Some(file_data) => {
+                    if file_data.get_read_done() {
+                        Some((file_data, line_id))
+                    } else {
+                        info!("file {} not read done", &file);
                         None
                     }
                 }
-            }
+                _ => {
+                    error!("file {} not found", &file);
+                    None
+                }
+            },
             _ => None,
         }
     }
@@ -285,7 +329,7 @@ impl Code {
         let ans = self
             .breakpoint_set
             .iter()
-            .map(|b| match b {
+            .map(|(_, val)| match val {
                 BreakPointData::Signal(p) => {
                     vec![(p.fullname.clone(), p.line, p.enabled)]
                 }
@@ -352,7 +396,7 @@ impl Code {
         let mut mark_as_id = true;
 
         // let empty_vec: (Vec<Vec<(_, _)>>, Vec<_>) = (vec![], vec![]);
-        let (src, src_str) = match self.files_set.get(&SrcFileData::new(file_name.clone())) {
+        let (src, src_str) = match self.files_set.get(&Rc::new(file_name.clone())) {
             Some(file) => match (file.get_read_done(), file.get_highlight_done()) {
                 (true, true) => (
                     file.get_highlight_lines_range(start_line, end_line).0,
@@ -547,10 +591,12 @@ impl Component for Code {
             action::Action::Gdbmi(gdbmi::Action::ShowFile((file, line_id))) => {
                 self.file_need_show = Some((file.clone(), line_id));
                 self.vertical_scroll = line_id as usize;
-                match self.files_set.contains(&SrcFileData::new(file.clone())) {
+                match self.files_set.contains_key(&file) {
                     false => {
                         if let Some(send) = self.command_tx.clone() {
-                            self.files_set.insert(SrcFileData::new(file.clone()));
+                            let file_data = SrcFileData::new(file.clone());
+                            self.files_set
+                                .insert(file_data.file_name.clone(), file_data);
                             let read_therad = Self::read_file(file.clone(), send.clone());
                             tokio::spawn(async {
                                 read_therad.await;
@@ -567,23 +613,19 @@ impl Component for Code {
                 }
             }
             action::Action::Gdbmi(gdbmi::Action::Breakpoint(bkpt)) => {
-                self.breakpoint_set.remove(&bkpt);
-                self.breakpoint_set.insert(bkpt);
+                let val = BreakPointData::from(&bkpt);
+                let key = val.get_key();
+                self.breakpoint_set.remove(&key);
+                self.breakpoint_set.insert(key, val);
             }
             action::Action::Gdbmi(gdbmi::Action::BreakpointDeleted(id)) => {
-                self.breakpoint_set
-                    .remove(&BreakPointData::Signal(BreakPointSignalData {
-                        number: id.to_string(),
-                        enabled: true,
-                        fullname: "".to_string(),
-                        line: 0_u64,
-                    }));
+                self.breakpoint_set.remove(&Rc::new(id.to_string()));
             }
             action::Action::Code(Action::FileReadOneLine((file, line))) => {
-                match self.files_set.take(&SrcFileData::new(file.clone())) {
-                    Some(mut file_data) => {
+                match self.files_set.remove_entry(&file) {
+                    Some((name, mut file_data)) => {
                         file_data.add_line(line);
-                        self.files_set.insert(file_data);
+                        self.files_set.insert(name, file_data);
                     }
                     _ => {
                         error!("file {} not found", &file);
@@ -591,11 +633,11 @@ impl Component for Code {
                 }
             }
             action::Action::Code(Action::FileReadEnd(file)) => {
-                match self.files_set.take(&SrcFileData::new(file.clone())) {
-                    Some(mut file_data) => {
+                match self.files_set.remove_entry(&file) {
+                    Some((name, mut file_data)) => {
                         if let Some(send) = self.command_tx.clone() {
                             file_data.set_read_done();
-                            self.files_set.insert(file_data.clone());
+                            self.files_set.insert(name, file_data.clone());
                             let highlight_thread = Self::highlight_file(
                                 file.clone(),
                                 file_data.get_lines().clone(),
@@ -616,10 +658,10 @@ impl Component for Code {
                 }
             }
             action::Action::Code(Action::FilehighlightLine((file, line))) => {
-                match self.files_set.take(&SrcFileData::new(file.clone())) {
-                    Some(mut file_data) => {
+                match self.files_set.remove_entry(&file) {
+                    Some((name, mut file_data)) => {
                         file_data.add_highlight_line(line);
-                        self.files_set.insert(file_data);
+                        self.files_set.insert(name, file_data);
                     }
                     _ => {
                         error!("file {} not found", &file);
@@ -627,10 +669,10 @@ impl Component for Code {
                 }
             }
             action::Action::Code(Action::FilehighlightEnd(file)) => {
-                match self.files_set.take(&SrcFileData::new(file.clone())) {
-                    Some(mut file_data) => {
+                match self.files_set.remove_entry(&file) {
+                    Some((name, mut file_data)) => {
                         file_data.set_highlight_done();
-                        self.files_set.insert(file_data);
+                        self.files_set.insert(name, file_data);
                     }
                     _ => {
                         error!("file {} not found", &file);
@@ -675,7 +717,7 @@ impl Component for Code {
                 end_line,
                 line_id,
                 n,
-                file.file_name.clone(),
+                (*file.file_name).clone(),
                 area_ids,
                 area_split,
                 area_src,
@@ -812,18 +854,18 @@ fn test_file_range_2() {
 
 #[test]
 fn f_breakpoint_range() {
-    use crate::mi::breakpointmi::BreakPointMultipleData;
-    let a = BreakPointData::Multiple(BreakPointMultipleData {
+    use crate::mi::breakpointmi::BreakPointMultipleAction;
+    let a = BreakPointAction::Multiple(BreakPointMultipleAction {
         number: "5".to_string(),
         enabled: false,
         bps: vec![
-            BreakPointSignalData {
+            BreakPointSignalAction {
                 number: "5.1".to_string(),
                 enabled: true,
                 line: 34_u64,
                 fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
             },
-            BreakPointSignalData {
+            BreakPointSignalAction {
                 number: "5.1".to_string(),
                 enabled: false,
                 line: 34_u64,
@@ -831,9 +873,9 @@ fn f_breakpoint_range() {
             },
         ],
     });
-
+    let a = BreakPointData::from(&a);
     let mut code = Code::new();
-    code.breakpoint_set.insert(a);
+    code.breakpoint_set.insert(a.get_key(), a);
     let ans =
         code.get_breakpoint_in_file_range(&"/home/shizhilvren/tmux/environ.c".to_string(), 22, 39);
     assert!(ans == HashMap::from([(34_u64, false)]));
@@ -841,18 +883,18 @@ fn f_breakpoint_range() {
 
 #[test]
 fn f_breakpoint_range_2() {
-    use crate::mi::breakpointmi::BreakPointMultipleData;
-    let a = BreakPointData::Multiple(BreakPointMultipleData {
+    use crate::mi::breakpointmi::BreakPointMultipleAction;
+    let a = BreakPointAction::Multiple(BreakPointMultipleAction {
         number: "5".to_string(),
         enabled: true,
         bps: vec![
-            BreakPointSignalData {
+            BreakPointSignalAction {
                 number: "5.1".to_string(),
                 enabled: true,
                 line: 34_u64,
                 fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
             },
-            BreakPointSignalData {
+            BreakPointSignalAction {
                 number: "5.1".to_string(),
                 enabled: false,
                 line: 34_u64,
@@ -861,8 +903,9 @@ fn f_breakpoint_range_2() {
         ],
     });
 
+    let a = BreakPointData::from(&a);
     let mut code = Code::new();
-    code.breakpoint_set.insert(a);
+    code.breakpoint_set.insert(a.get_key(), a);
     let ans =
         code.get_breakpoint_in_file_range(&"/home/shizhilvren/tmux/environ.c".to_string(), 22, 39);
     assert!(ans == HashMap::from([(34_u64, true)]));
@@ -870,22 +913,23 @@ fn f_breakpoint_range_2() {
 
 #[test]
 fn f_breakpoint_range_3() {
-    let a = BreakPointData::Signal(BreakPointSignalData {
+    let a = BreakPointAction::Signal(BreakPointSignalAction {
         number: "2".to_string(),
         enabled: true,
         line: 34_u64,
         fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
     });
-    let b = BreakPointData::Signal(BreakPointSignalData {
+    let b = BreakPointAction::Signal(BreakPointSignalAction {
         number: "6".to_string(),
         enabled: true,
         line: 37_u64,
         fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
     });
-
+    let a = BreakPointData::from(&a);
+    let b = BreakPointData::from(&b);
     let mut code = Code::new();
-    code.breakpoint_set.insert(a);
-    code.breakpoint_set.insert(b);
+    code.breakpoint_set.insert(a.get_key(), a);
+    code.breakpoint_set.insert(b.get_key(), b);
     let ans =
         code.get_breakpoint_in_file_range(&"/home/shizhilvren/tmux/environ.c".to_string(), 22, 36);
     assert!(ans == HashMap::from([(34_u64, true)]));

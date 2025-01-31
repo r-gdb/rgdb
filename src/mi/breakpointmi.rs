@@ -1,7 +1,6 @@
 // use bytes;
 use lalrpop_util::lalrpop_mod;
 use serde::{Deserialize, Serialize};
-use std::hash::Hash;
 
 lalrpop_mod!(
     #[allow(clippy::ptr_arg)]
@@ -11,62 +10,25 @@ lalrpop_mod!(
 );
 use crate::mi::token::*;
 
-#[derive(Debug, Clone, Serialize, Eq, Deserialize)]
-pub struct BreakPointMultipleData {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BreakPointMultipleAction {
     pub number: String,
     pub enabled: bool,
-    pub bps: Vec<BreakPointSignalData>,
+    pub bps: Vec<BreakPointSignalAction>,
 }
 
-#[derive(Debug, Clone, Serialize, Eq, Deserialize)]
-pub struct BreakPointSignalData {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BreakPointSignalAction {
     pub number: String,
     pub enabled: bool,
     pub fullname: String,
     pub line: u64,
 }
 
-#[derive(Debug, Clone, Hash, Eq, Serialize, Deserialize)]
-pub enum BreakPointData {
-    Signal(BreakPointSignalData),
-    Multiple(BreakPointMultipleData),
-}
-
-impl Hash for BreakPointMultipleData {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.number.hash(state);
-    }
-}
-impl Hash for BreakPointSignalData {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.number.hash(state);
-    }
-}
-
-impl PartialEq for BreakPointData {
-    fn eq(&self, other: &Self) -> bool {
-        let a_number = match self {
-            Self::Signal(b) => b.number.clone(),
-            Self::Multiple(b) => b.number.clone(),
-        };
-        let b_number = match other {
-            Self::Signal(b) => b.number.clone(),
-            Self::Multiple(b) => b.number.clone(),
-        };
-        a_number == b_number
-    }
-}
-
-impl PartialEq for BreakPointSignalData {
-    fn eq(&self, other: &Self) -> bool {
-        self.number == other.number
-    }
-}
-
-impl PartialEq for BreakPointMultipleData {
-    fn eq(&self, other: &Self) -> bool {
-        self.number == other.number
-    }
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BreakPointAction {
+    Signal(BreakPointSignalAction),
+    Multiple(BreakPointMultipleAction),
 }
 
 pub fn show_breakpoint_deleted(a: &OutOfBandRecordType) -> Option<u64> {
@@ -95,7 +57,7 @@ pub fn show_breakpoint_deleted(a: &OutOfBandRecordType) -> Option<u64> {
     ret
 }
 
-fn get_from_signal_point(v: &ValueType) -> Option<BreakPointSignalData> {
+fn get_from_signal_point(v: &ValueType) -> Option<BreakPointSignalAction> {
     let mut file = None;
     let mut line = None;
     let mut number = None;
@@ -133,7 +95,7 @@ fn get_from_signal_point(v: &ValueType) -> Option<BreakPointSignalData> {
         });
     }
     match (file, line, number, enabled) {
-        (Some(file), Some(line), Some(number), Some(enabled)) => Some(BreakPointSignalData {
+        (Some(file), Some(line), Some(number), Some(enabled)) => Some(BreakPointSignalAction {
             number: number.clone(),
             enabled: enabled,
             fullname: file,
@@ -143,7 +105,7 @@ fn get_from_signal_point(v: &ValueType) -> Option<BreakPointSignalData> {
     }
 }
 
-fn get_from_bkpt(r: &ResultType) -> Option<BreakPointData> {
+fn get_from_bkpt(r: &ResultType) -> Option<BreakPointAction> {
     let mut file = None;
     let mut line = None;
     let mut number = None;
@@ -203,7 +165,7 @@ fn get_from_bkpt(r: &ResultType) -> Option<BreakPointData> {
     }
     match (file, line, number, enabled, multiple) {
         (Some(file), Some(line), Some(number), Some(enabled), false) => {
-            Some(BreakPointData::Signal(BreakPointSignalData {
+            Some(BreakPointAction::Signal(BreakPointSignalAction {
                 number: number.clone(),
                 enabled: enabled,
                 fullname: file,
@@ -211,7 +173,7 @@ fn get_from_bkpt(r: &ResultType) -> Option<BreakPointData> {
             }))
         }
         (None, None, Some(number), Some(enabled), true) => {
-            Some(BreakPointData::Multiple(BreakPointMultipleData {
+            Some(BreakPointAction::Multiple(BreakPointMultipleAction {
                 number: number.clone(),
                 enabled: enabled,
                 bps: bps,
@@ -221,7 +183,7 @@ fn get_from_bkpt(r: &ResultType) -> Option<BreakPointData> {
     }
 }
 
-pub fn show_bkpt(a: &OutOfBandRecordType) -> Option<BreakPointData> {
+pub fn show_bkpt(a: &OutOfBandRecordType) -> Option<BreakPointAction> {
     let mut ret = None;
     let OutOfBandRecordType::AsyncRecord(a) = a;
     match a {
@@ -231,7 +193,7 @@ pub fn show_bkpt(a: &OutOfBandRecordType) -> Option<BreakPointData> {
                     ret = get_from_bkpt(r);
                 });
 
-                if let Some(BreakPointData::Multiple(bp)) = ret.as_mut() {
+                if let Some(BreakPointAction::Multiple(bp)) = ret.as_mut() {
                     // for mi2
                     a.async_output.values.iter().for_each(|v| {
                         if let Some(p) = get_from_signal_point(v) {
@@ -366,7 +328,7 @@ fn f_breakpoint_created_2() {
     let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-created,bkpt={number=\"1\",type=\"breakpoint\",disp=\"del\",enabled=\"y\",addr=\"0x0000000000404570\",func=\"main\",file=\"tmux.c\",fullname=\"/home/shizhilvren/tmux/tmux.c\",line=\"355\",thread-groups=[\"i1\"],times=\"0\",original-location=\"main\"}\n" );
     let bkpt = show_bkpt(&a.unwrap());
     assert!(
-        bkpt == Some(BreakPointData::Signal(BreakPointSignalData {
+        bkpt == Some(BreakPointAction::Signal(BreakPointSignalAction {
             number: "1".to_string(),
             enabled: true,
             fullname: "/home/shizhilvren/tmux/tmux.c".to_string(),
@@ -380,7 +342,7 @@ fn f_breakpoint_modified_2() {
     let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-modified,bkpt={number=\"2\",type=\"breakpoint\",disp=\"keep\",enabled=\"n\",addr=\"0x0000000000404570\",func=\"main\",file=\"tmux.c\",fullname=\"/home/shizhilvren/tmux/tmux.c\",line=\"355\",thread-groups=[\"i1\"],cond=\"1==2\",times=\"0\",original-location=\"main\"}\n"  );
     let bkpt = show_bkpt(&a.unwrap());
     assert!(
-        bkpt == Some(BreakPointData::Signal(BreakPointSignalData {
+        bkpt == Some(BreakPointAction::Signal(BreakPointSignalAction {
             number: "2".to_string(),
             enabled: false,
             fullname: "/home/shizhilvren/tmux/tmux.c".to_string(),
@@ -405,18 +367,18 @@ fn f_breakpoint_modified_3() {
     println!("{:?}", &bkpt);
 
     assert!(
-        bkpt == Some(BreakPointData::Multiple(BreakPointMultipleData {
+        bkpt == Some(BreakPointAction::Multiple(BreakPointMultipleAction {
             number: "5".to_string(),
             enabled: false,
             bps: vec![
-                BreakPointSignalData {
+                BreakPointSignalAction {
                     number: "5.1".to_string(),
                     enabled: true,
                     line: 34_u64,
                     fullname: "/home/shizhilvren/tmux/environ.c".to_string()
                 },
-                BreakPointSignalData {
-                    number: "5.1".to_string(),
+                BreakPointSignalAction {
+                    number: "5.2".to_string(),
                     enabled: false,
                     line: 34_u64,
                     fullname: "/home/shizhilvren/tmux/environ.c".to_string()
@@ -437,17 +399,17 @@ fn f_breakpoint_modified_4() {
     let bkpt = show_bkpt(&a.unwrap());
     println!("{:?}", &bkpt);
     assert!(
-        bkpt == Some(BreakPointData::Multiple(BreakPointMultipleData {
+        bkpt == Some(BreakPointAction::Multiple(BreakPointMultipleAction {
             number: "2".to_string(),
             enabled: false,
             bps: vec![
-                BreakPointSignalData {
+                BreakPointSignalAction {
                     number: "2.1".to_string(),
                     enabled: true,
                     line: 34_u64,
                     fullname: "/home/shizhilvren/tmux/environ.c".to_string()
                 },
-                BreakPointSignalData {
+                BreakPointSignalAction {
                     number: "2.8".to_string(),
                     enabled: false,
                     line: 34_u64,
@@ -460,17 +422,17 @@ fn f_breakpoint_modified_4() {
 
 #[test]
 fn f_breakpoint() {
-    let a = BreakPointData::Multiple(BreakPointMultipleData {
+    let a = BreakPointAction::Multiple(BreakPointMultipleAction {
         number: "5".to_string(),
         enabled: false,
         bps: vec![
-            BreakPointSignalData {
+            BreakPointSignalAction {
                 number: "5.1".to_string(),
                 enabled: true,
                 line: 34_u64,
                 fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
             },
-            BreakPointSignalData {
+            BreakPointSignalAction {
                 number: "5.1".to_string(),
                 enabled: false,
                 line: 34_u64,
@@ -478,11 +440,11 @@ fn f_breakpoint() {
             },
         ],
     });
-    let b = BreakPointData::Signal(BreakPointSignalData {
+    let b = BreakPointAction::Signal(BreakPointSignalAction {
         number: "5".to_string(),
         enabled: true,
         line: 34_u64,
         fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
     });
-    assert!(a == b);
+    assert!(a != b);
 }
