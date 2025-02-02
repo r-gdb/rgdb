@@ -16,7 +16,6 @@ use syntect::easy::HighlightLines;
 use syntect::parsing::SyntaxSet;
 use tokio::fs::File;
 use tokio::io::AsyncBufReadExt;
-
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
@@ -329,7 +328,7 @@ impl Code {
         let ans = self
             .breakpoint_set
             .iter()
-            .map(|(_, val)| match val {
+            .flat_map(|(_, val)| match val {
                 BreakPointData::Signal(p) => {
                     vec![(p.fullname.clone(), p.line, p.enabled)]
                 }
@@ -339,7 +338,6 @@ impl Code {
                     .map(|bp| (bp.fullname.clone(), bp.line, bp.enabled && p.enabled))
                     .collect::<Vec<_>>(),
             })
-            .flatten()
             .filter(|(name, line, _)| {
                 name == file_name && start_line <= *line as usize && *line as usize <= end_line
             })
@@ -456,7 +454,7 @@ impl Code {
         let scroll_x = file_name.len().saturating_sub(self.area.width as usize) as u16;
         let paragraph_status = Paragraph::new(title)
             .fg(Color::Black)
-            .bg(Color::White)
+            .bg(Color::Gray)
             .scroll((0, scroll_x));
         frame.render_widget(paragraph_status, area_status);
     }

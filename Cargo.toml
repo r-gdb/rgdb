@@ -47,6 +47,7 @@ tracing = "0.1.40"
 tracing-error = "0.2.0"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "serde"] }
 tui-term = "0.2.0"
+tui-widgets = "0.4.1"
 vt100 = "0.15.2"
 which = "7.0.1"
 

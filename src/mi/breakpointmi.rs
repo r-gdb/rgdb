@@ -97,9 +97,9 @@ fn get_from_signal_point(v: &ValueType) -> Option<BreakPointSignalAction> {
     match (file, line, number, enabled) {
         (Some(file), Some(line), Some(number), Some(enabled)) => Some(BreakPointSignalAction {
             number: number.clone(),
-            enabled: enabled,
+            enabled,
             fullname: file,
-            line: line,
+            line,
         }),
         _ => None,
     }
@@ -167,16 +167,16 @@ fn get_from_bkpt(r: &ResultType) -> Option<BreakPointAction> {
         (Some(file), Some(line), Some(number), Some(enabled), false) => {
             Some(BreakPointAction::Signal(BreakPointSignalAction {
                 number: number.clone(),
-                enabled: enabled,
+                enabled,
                 fullname: file,
-                line: line,
+                line,
             }))
         }
         (None, None, Some(number), Some(enabled), true) => {
             Some(BreakPointAction::Multiple(BreakPointMultipleAction {
                 number: number.clone(),
-                enabled: enabled,
-                bps: bps,
+                enabled,
+                bps,
             }))
         }
         _ => None,

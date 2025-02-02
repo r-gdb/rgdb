@@ -3,7 +3,8 @@ use crate::components::gdbtty::Action as GdbttyAction;
 use crate::{
     action,
     components::{
-        code::Code, fps::FpsCounter, gdbmi::Gdbmi, gdbtty::Gdbtty, home::Home, Component,
+        code::Code, fps::FpsCounter, gdbmi::Gdbmi, gdbtty::Gdbtty, home::Home,
+        startpage::StartPage, Component,
     },
     config::Config,
     tui::{Event, Tui},
@@ -53,6 +54,7 @@ impl App {
                 Box::new(FpsCounter::default()),
                 Box::new(Gdbmi::new()),
                 Box::new(Gdbtty::new()),
+                Box::new(StartPage::new()),
             ],
             should_quit: false,
             should_suspend: false,
@@ -61,8 +63,8 @@ impl App {
             last_tick_key_events: Vec::new(),
             action_tx,
             action_rx,
-            gdb_path: gdb_path,
-            gdb_args: gdb_args,
+            gdb_path,
+            gdb_args,
         })
     }
 
