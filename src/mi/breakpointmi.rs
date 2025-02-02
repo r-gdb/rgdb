@@ -263,9 +263,9 @@ fn f_breakpoint_created() {
                                 },
                                 ResultType {
                                     variable: "thread-groups".to_string(),
-                                    value: ValueType::List(List::Values(vec![
-                                        ValueType::Const("i1".to_string())
-                                    ])),
+                                    value: ValueType::List(List::Values(vec![ValueType::Const(
+                                        "i1".to_string()
+                                    )])),
                                 },
                                 ResultType {
                                     variable: "times".to_string(),
