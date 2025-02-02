@@ -80,8 +80,8 @@ pub enum Tuple {
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub enum List {
     None,
-    ResultList(Vec<ResultType>),
-    ValueList(Vec<ValueType>),
+    Results(Vec<ResultType>),
+    Values(Vec<ValueType>),
 }
 
 // pub fn apply_string_escapes(s: &str) -> String {
@@ -390,7 +390,7 @@ mod tests {
         let a = miout::TokListParser::new().parse(r##"[number="1",type="breakpoint",disp="del"]"##);
         assert!(
             a.unwrap()
-                == List::ResultList(vec![
+                == List::Results(vec![
                     ResultType {
                         variable: "number".to_string(),
                         value: ValueType::Const("1".to_string())
@@ -413,7 +413,7 @@ mod tests {
             .parse(r##"[{from="0x00007ffff5106ff0",to="0x00007ffff5107cd2"},[a="cccc"]]"##);
         assert!(
             a.unwrap()
-                == List::ValueList(vec![
+                == List::Values(vec![
                     ValueType::Tuple(Tuple::Results(vec![
                         ResultType {
                             variable: "from".to_string(),
@@ -424,7 +424,7 @@ mod tests {
                             value: ValueType::Const("0x00007ffff5107cd2".to_string())
                         }
                     ])),
-                    ValueType::List(List::ResultList(vec![ResultType {
+                    ValueType::List(List::Results(vec![ResultType {
                         variable: "a".to_string(),
                         value: ValueType::Const("cccc".to_string())
                     }]))

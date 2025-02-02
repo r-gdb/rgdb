@@ -103,12 +103,12 @@ pub TokList:List = {
     "[" <v:(<TokResult> <TokComma>)* > <e:TokResult> "]" => {
         let mut v = v.into_iter().map(|(r, c)| r).collect::<Vec<ResultType>>();
         v.push(e);
-        List::ResultList(v)
+        List::Results(v)
     },
     "[" <v:(<TokValue> <TokComma>)* > <e:TokValue> "]" => {
         let mut v = v.into_iter().map(|(r, c)| r).collect::<Vec<ValueType>>();
         v.push(e);
-        List::ValueList(v)
+        List::Values(v)
     },
 };
 

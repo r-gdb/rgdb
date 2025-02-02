@@ -450,8 +450,8 @@ impl Code {
         mark_as_id
     }
     fn draw_status(&mut self, frame: &mut Frame, file_name: String, area_status: Rect) {
-        let title = format!("{}", &file_name);
-        let scroll_x = file_name.len().saturating_sub(self.area.width as usize) as u16;
+        let title = file_name;
+        let scroll_x = title.len().saturating_sub(self.area.width as usize) as u16;
         let paragraph_status = Paragraph::new(title)
             .fg(Color::Black)
             .bg(Color::Gray)

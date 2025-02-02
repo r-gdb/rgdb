@@ -151,7 +151,7 @@ fn get_from_bkpt(r: &ResultType) -> Option<BreakPointAction> {
                 }
                 // for mi3 and upper
                 "locations" => {
-                    if let ValueType::List(List::ValueList(list)) = &r.value {
+                    if let ValueType::List(List::Values(list)) = &r.value {
                         list.iter().for_each(|v| {
                             if let Some(p) = get_from_signal_point(v) {
                                 bps.push(p);
@@ -263,7 +263,7 @@ fn f_breakpoint_created() {
                                 },
                                 ResultType {
                                     variable: "thread-groups".to_string(),
-                                    value: ValueType::List(List::ValueList(vec![
+                                    value: ValueType::List(List::Values(vec![
                                         ValueType::Const("i1".to_string())
                                     ])),
                                 },

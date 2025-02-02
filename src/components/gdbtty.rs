@@ -46,7 +46,7 @@ impl Gdbtty {
         let ans = self
             .gdb_process
             .as_mut()
-            .map_or(false, |p| match p.try_wait() {
+            .is_some_and(|p| match p.try_wait() {
                 std::result::Result::Ok(Some(_)) => true,
                 _ => false,
             });
@@ -102,7 +102,7 @@ impl Gdbtty {
         let gdb_args = self.gdb_args.iter().map(|s| s.as_str());
         let args = [self.gdb_path.as_str(), "--nw", "--ex", s.as_str()]
             .iter()
-            .map(|s| *s)
+            .copied()
             .chain(gdb_args)
             .map(|s| -> Result<std::ffi::OsString> { Ok(std::ffi::OsString::from_str(s)?) })
             .collect::<Result<Vec<_>>>()?;

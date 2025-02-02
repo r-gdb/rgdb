@@ -149,11 +149,11 @@ impl Component for Home {
             .contains(ratatui::layout::Position::new(mouse.column, mouse.row));
         match mouse.kind {
             crossterm::event::MouseEventKind::ScrollUp => match is_in {
-                true => Ok(Some(action::Action::Home(Action::Up(3 as usize)))),
+                true => Ok(Some(action::Action::Home(Action::Up(3_usize)))),
                 false => Ok(None),
             },
             crossterm::event::MouseEventKind::ScrollDown => match is_in {
-                true => Ok(Some(action::Action::Home(Action::Down(3 as usize)))),
+                true => Ok(Some(action::Action::Home(Action::Down(3_usize)))),
                 false => Ok(None),
             },
             _ => Ok(None),
@@ -206,8 +206,8 @@ impl Component for Home {
         let [_, _, area] = tool::get_layout(area);
         let n = self.get_text_hight(&area);
         self.set_scroll_bar_status(n);
-        self.draw_cmd(frame, area.clone());
-        self.draw_scroll(frame, area.clone(), n);
+        self.draw_cmd(frame, area);
+        self.draw_scroll(frame, area, n);
 
         Ok(())
     }
