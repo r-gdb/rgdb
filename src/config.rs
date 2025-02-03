@@ -542,7 +542,7 @@ mod tests {
             c.keybindings
                 .get(&Mode::Gdb)
                 .unwrap()
-                .get(&parse_key_sequence("<Ctrl+z>").unwrap_or_default())
+                .get(&parse_key_sequence("<Ctrl-z>").unwrap_or_default())
                 .unwrap(),
             &Action::Suspend
         );
