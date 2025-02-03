@@ -371,19 +371,74 @@ impl Code {
         } else {
             None
         };
-        let mark_as_id = self.draw_src(
+        self.draw_src(frame, &file_name, start_line, end_line, area_src);
+        self.draw_breakpoint(frame, &file_name, start_line, end_line, area_ids);
+        self.draw_id(frame, start_line, end_line, line_id, area_ids);
+        self.draw_split(frame, area_split);
+        self.draw_currect_pointer(
             frame,
             &file_name,
             start_line,
-            end_line,
             &line_id_start_0,
-            area_src,
+            area_src.union(area_split),
         );
-        self.draw_breakpoint(frame, &file_name, start_line, end_line, area_ids);
-        self.draw_id(frame, start_line, end_line, line_id, area_ids);
-        self.draw_split(frame, &line_id_start_0, mark_as_id, area_split);
         self.draw_status(frame, file_name, area_status);
         self.draw_scroll(frame, area_src, n);
+    }
+    fn draw_currect_pointer(
+        &mut self,
+        frame: &mut Frame,
+        file_name: &String,
+        start_line: usize,
+        line_id_start_0: &Option<usize>,
+        area_currect_pointer: Rect,
+    ) {
+        if let Some(line_id_start_0) = line_id_start_0 {
+            debug!("pointer {:?}", line_id_start_0);
+            let [_, area_pointer, _] = Layout::vertical([
+                Constraint::Length(*line_id_start_0 as u16),
+                Constraint::Max(1_u16),
+                Constraint::Fill(1),
+            ])
+            .areas(area_currect_pointer);
+            let point_line = start_line.saturating_add(*line_id_start_0);
+            let pointer_size = self
+                .files_set
+                .get(&Rc::new(file_name.clone()))
+                .and_then(|file| match file.get_read_done() {
+                    true => file
+                        .get_lines_range(point_line, point_line + 1)
+                        .0
+                        .iter()
+                        .nth(0)
+                        .and_then(|s| (**s).chars().enumerate().find(|(_, c)| *c != ' '))
+                        .map(|(id, _)| id),
+                    _ => None,
+                });
+
+            debug!("pointer size {:?}", &pointer_size);
+
+            if let Some(n) = pointer_size {
+                let text_pointer = Line::from_iter(
+                    std::iter::repeat_n(
+                        Span::raw('├'.to_string()).style(Style::default().light_green()),
+                        1,
+                    )
+                    .chain(std::iter::repeat_n(
+                        Span::raw('─'.to_string()).style(Style::default().light_green()),
+                        n.saturating_sub(1),
+                    ))
+                    .chain(std::iter::repeat_n(
+                        Span::raw('>'.to_string()).style(Style::default().light_green()),
+                        1,
+                    )),
+                );
+                debug!("pointer {:?}", &text_pointer);
+
+                let paragraph_pointer = Paragraph::new(text_pointer);
+                frame.render_widget(paragraph_pointer, area_pointer);
+            }
+        }
     }
     fn draw_src(
         &mut self,
@@ -391,66 +446,28 @@ impl Code {
         file_name: &String,
         start_line: usize,
         end_line: usize,
-        line_id_start_0: &Option<usize>,
         area_src: Rect,
-    ) -> bool {
-        let mut mark_as_id = true;
-
+    ) {
         // let empty_vec: (Vec<Vec<(_, _)>>, Vec<_>) = (vec![], vec![]);
-        let (src, src_str) = match self.files_set.get(&Rc::new(file_name.clone())) {
+        let src = match self.files_set.get(&Rc::new(file_name.clone())) {
             Some(file) => match (file.get_read_done(), file.get_highlight_done()) {
-                (true, true) => (
-                    file.get_highlight_lines_range(start_line, end_line).0,
-                    file.get_lines_range(start_line, end_line).0,
-                ),
-                (false, true) => (
-                    file.get_lines_range(start_line, end_line)
-                        .0
-                        .iter()
-                        .map(|s| vec![(ratatui::style::Color::White, s.to_string())])
-                        .collect(),
-                    file.get_lines_range(start_line, end_line).0,
-                ),
-                _ => (vec![], vec![]),
+                (true, true) => file.get_highlight_lines_range(start_line, end_line).0,
+                (false, true) => file
+                    .get_lines_range(start_line, end_line)
+                    .0
+                    .iter()
+                    .map(|s| vec![(ratatui::style::Color::White, s.to_string())])
+                    .collect(),
+                _ => vec![],
             },
-            None => (vec![], vec![]),
+            None => vec![],
         };
         let text_src = Text::from_iter(src.iter().map(|s| {
             // debug!("line stop {} {:?}", id, first_litter_id);
             Line::from_iter(s.iter().map(|(c, s)| Span::raw(s).fg(*c)))
         }));
-        let text_pointer = Text::from_iter(src_str.iter().enumerate().map(|(id, s)| {
-            let first_litter_id = match *line_id_start_0 == Some(id) {
-                true => s.chars().enumerate().find(|(_, c)| *c != ' '),
-                false => None,
-            };
-            // debug!("line stop {} {:?}", id, first_litter_id);
-            let str_iter = std::iter::empty();
-            Line::from(match first_litter_id {
-                Some((0, _)) => str_iter.collect::<Vec<_>>(),
-                Some((1, _)) => str_iter.collect::<Vec<_>>(),
-                Some((n, _)) => {
-                    mark_as_id = false;
-                    std::iter::repeat_n(
-                        Span::raw('─'.to_string()).style(Style::default().light_green()),
-                        n.saturating_sub(2),
-                    )
-                    .chain(std::iter::repeat_n(
-                        Span::raw('>'.to_string()).style(Style::default().light_green()),
-                        1,
-                    ))
-                    .collect::<Vec<_>>()
-                }
-                _ => str_iter.collect::<Vec<_>>(),
-            })
-        }));
-
         let paragraph_src = Paragraph::new(text_src);
-        let paragraph_pointer = Paragraph::new(text_pointer);
-
         frame.render_widget(paragraph_src, area_src);
-        frame.render_widget(paragraph_pointer, area_src);
-        mark_as_id
     }
     fn draw_status(&mut self, frame: &mut Frame, file_name: String, area_status: Rect) {
         let title = file_name;
@@ -509,22 +526,11 @@ impl Code {
         frame.render_widget(paragraph_id, area_ids);
     }
 
-    fn draw_split(
-        &mut self,
-        frame: &mut Frame,
-        line_id_start_0: &Option<usize>,
-        mark_as_id: bool,
-        area_split: Rect,
-    ) {
-        let test_split = Text::from_iter(
-            std::iter::repeat_n(Line::from("│ "), area_split.height as usize)
-                .enumerate()
-                .map(|(id, s)| match (*line_id_start_0 == Some(id), mark_as_id) {
-                    (true, true) => Line::from("├>").style(Style::default().light_green()),
-                    (true, false) => Line::from("├─").style(Style::default().light_green()),
-                    (false, _) => s,
-                }),
-        );
+    fn draw_split(&mut self, frame: &mut Frame, area_split: Rect) {
+        let test_split = Text::from_iter(std::iter::repeat_n(
+            Line::from("│ "),
+            area_split.height as usize,
+        ));
         let paragraph_split = Paragraph::new(test_split);
         frame.render_widget(paragraph_split, area_split);
     }

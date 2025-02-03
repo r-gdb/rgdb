@@ -1,20 +1,17 @@
 use super::Component;
 use crate::action;
 use crate::app::Mode;
-use crate::components::code;
 use crate::tool;
 use color_eyre::Result;
+use ratatui::prelude::*;
 use ratatui::text::Line;
 use ratatui::{
-    layout::{Constraint, Layout, Rect},
-    style::{Color, Style, Stylize},
+    layout::Rect,
+    style::{Color, Stylize},
     widgets::Paragraph,
     Frame,
 };
-use ratatui::{prelude::*, widgets::*};
-use tui_widgets::big_text::{BigText, PixelSize};
 
-use crate::components::home;
 #[derive(Debug, Clone, PartialEq)]
 pub struct StatusBar {
     is_show: bool,
