@@ -37,17 +37,21 @@ impl StatusBar {
     fn is_show(&self) -> bool {
         self.is_show
     }
-    fn set_is_show(&mut self, val: bool) {
-        self.is_show = val;
-    }
-    fn hit_text(&self) -> Span<'_> {
-        let change_mode = match self.mode {
-            Mode::Gdb => "CODE",
-            Mode::Code => "GDB",
+    // fn set_is_show(&mut self, val: bool) {
+    //     self.is_show = val;
+    // }
+    fn hit_text(&self) -> Vec<Span<'_>> {
+        let hits = match self.mode {
+            Mode::Gdb => vec!["<Esc> CODE"],
+            Mode::Code => vec!["<←↓↑→> Scroll Code", "<Esc> GDB"],
         };
-        let change_mode_hit = format!("<Esc> {}", change_mode);
-        let hit = Span::from(change_mode_hit).bg(Color::Gray).fg(Color::Black);
-        hit
+        hits.into_iter()
+            .map(|hit| {
+                Span::from(hit)
+                    .bg(Color::Rgb(160, 160, 160))
+                    .fg(Color::Black)
+            })
+            .collect::<Vec<_>>()
     }
 
     fn mode_text(&self) -> Span<'_> {
@@ -69,7 +73,12 @@ impl StatusBar {
         let mode_name = self.mode_text();
         let hit = self.hit_text();
         let s = Span::from(" ").bg(Color::Black);
-        let line = Line::from_iter(vec![hit, s, mode_name]);
+        let hits = hit
+            .into_iter()
+            .map(|it| vec![it, s.clone()])
+            .flatten()
+            .chain(std::iter::once(mode_name));
+        let line = Line::from_iter(hits);
         let paragraph_status = Paragraph::new(line)
             .fg(Color::Gray)
             .bg(Color::Black)

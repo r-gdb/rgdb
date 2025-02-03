@@ -256,12 +256,14 @@ impl Component for Gdbtty {
         key: crossterm::event::KeyEvent,
     ) -> Result<Option<action::Action>> {
         if self.handle_key() {
-            if let Some(bytes) = Gdbtty::handle_pane_key_event(&key) {
-                let bytes = bytes.into_iter().map(char::from).collect::<String>();
-                if let Some(write) = self.gdb_writer.as_mut() {
-                    write!(write, "{}", bytes.as_str())?;
-                }
-            };
+            if key.code != crossterm::event::KeyCode::Esc {
+                if let Some(bytes) = Gdbtty::handle_pane_key_event(&key) {
+                    let bytes = bytes.into_iter().map(char::from).collect::<String>();
+                    if let Some(write) = self.gdb_writer.as_mut() {
+                        write!(write, "{}", bytes.as_str())?;
+                    }
+                };
+            }
         }
         Ok(None)
     }

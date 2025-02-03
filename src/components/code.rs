@@ -307,13 +307,30 @@ impl Code {
     fn file_up(&mut self, n: usize) {
         self.vertical_scroll = self.vertical_scroll.saturating_sub(n);
     }
-    fn legalization_scroll_range(&mut self, hight: usize, n: usize) -> (usize, usize) {
+    fn file_left(&mut self, n: usize) {
+        self.horizontial_scroll = self.horizontial_scroll.saturating_sub(n);
+    }
+    fn file_right(&mut self, n: usize) {
+        self.horizontial_scroll = self.horizontial_scroll.saturating_add(n);
+    }
+    fn legalization_vertical_scroll_range(&mut self, hight: usize, n: usize) -> (usize, usize) {
         let up_half = hight.div_euclid(2);
         let down_half = hight.div_ceil(2);
         let start = up_half.saturating_add(1);
         let end = n.saturating_sub(down_half).saturating_add(1).max(start);
         self.vertical_scroll = self.vertical_scroll.max(start);
         self.vertical_scroll = self.vertical_scroll.min(end);
+        (start, end)
+    }
+    fn legalization_horizontial_scroll_range(
+        &mut self,
+        width: usize,
+        text_len: usize,
+    ) -> (usize, usize) {
+        let end = text_len.saturating_add(2_usize).saturating_sub(width);
+        let start = 0_usize;
+        self.horizontial_scroll = self.horizontial_scroll.max(start);
+        self.horizontial_scroll = self.horizontial_scroll.min(end);
         (start, end)
     }
     fn get_windows_show_file_range(&self, hight: usize) -> (usize, usize) {
@@ -394,7 +411,6 @@ impl Code {
         area_currect_pointer: Rect,
     ) {
         if let Some(line_id_start_0) = line_id_start_0 {
-            debug!("pointer {:?}", line_id_start_0);
             let [_, area_pointer, _] = Layout::vertical([
                 Constraint::Length(*line_id_start_0 as u16),
                 Constraint::Max(1_u16),
@@ -412,28 +428,23 @@ impl Code {
                         .iter()
                         .nth(0)
                         .and_then(|s| (**s).chars().enumerate().find(|(_, c)| *c != ' '))
-                        .map(|(id, _)| id),
+                        .map(|(id, _)| id.saturating_sub(self.horizontial_scroll)),
                     _ => None,
                 });
 
-            debug!("pointer size {:?}", &pointer_size);
-
             if let Some(n) = pointer_size {
                 let text_pointer = Line::from_iter(
-                    std::iter::repeat_n(
+                    std::iter::once(
                         Span::raw('├'.to_string()).style(Style::default().light_green()),
-                        1,
                     )
                     .chain(std::iter::repeat_n(
                         Span::raw('─'.to_string()).style(Style::default().light_green()),
                         n.saturating_sub(1),
                     ))
-                    .chain(std::iter::repeat_n(
+                    .chain(std::iter::once(
                         Span::raw('>'.to_string()).style(Style::default().light_green()),
-                        1,
                     )),
                 );
-                debug!("pointer {:?}", &text_pointer);
 
                 let paragraph_pointer = Paragraph::new(text_pointer);
                 frame.render_widget(paragraph_pointer, area_pointer);
@@ -462,11 +473,11 @@ impl Code {
             },
             None => vec![],
         };
-        let text_src = Text::from_iter(src.iter().map(|s| {
-            // debug!("line stop {} {:?}", id, first_litter_id);
-            Line::from_iter(s.iter().map(|(c, s)| Span::raw(s).fg(*c)))
-        }));
-        let paragraph_src = Paragraph::new(text_src);
+        let text_src = Text::from_iter(
+            src.iter()
+                .map(|s| Line::from_iter(s.iter().map(|(c, s)| Span::raw(s).fg(*c)))),
+        );
+        let paragraph_src = Paragraph::new(text_src).scroll((0, self.horizontial_scroll as u16));
         frame.render_widget(paragraph_src, area_src);
     }
     fn draw_status(&mut self, frame: &mut Frame, file_name: String, area_status: Rect) {
@@ -595,6 +606,12 @@ impl Component for Code {
             action::Action::Code(Action::Down(p)) => {
                 self.file_down(p);
             }
+            action::Action::Code(Action::Left(p)) => {
+                self.file_left(p);
+            }
+            action::Action::Code(Action::Right(p)) => {
+                self.file_right(p);
+            }
             action::Action::Gdbmi(gdbmi::Action::ShowFile((file, line_id))) => {
                 self.file_need_show = Some((file.clone(), line_id));
                 self.vertical_scroll = line_id as usize;
@@ -707,8 +724,24 @@ impl Component for Code {
 
         ans.map(|(n, _, _, area_src, _)| (area_src.height, n))
             .map(|(height, n)| {
-                self.legalization_scroll_range(height as usize, n);
+                self.legalization_vertical_scroll_range(height as usize, n);
+                Some(())
+            });
 
+        self.get_need_show_file()
+            .map(|(file, _)| {
+                if let Some((_, _, _, area_src, _)) = ans {
+                    let (start_line, end_line) =
+                        self.get_windows_show_file_range(area_src.height as usize);
+                    let (src_text, _, _) = file.get_lines_range(start_line, end_line);
+                    let text_len = src_text.iter().map(|s| s.len()).max().unwrap_or(0);
+                    (area_src.width, text_len)
+                } else {
+                    (0, 0_usize)
+                }
+            })
+            .map(|(width, text_len)| {
+                self.legalization_horizontial_scroll_range(width as usize, text_len);
                 Some(())
             });
 
@@ -766,7 +799,7 @@ impl Component for Code {
 #[test]
 fn test_scroll_range() {
     let mut code = Code::default();
-    let a = code.legalization_scroll_range(32, 64);
+    let a = code.legalization_vertical_scroll_range(32, 64);
     println! {"let {:?}",a};
     assert!(a == (17_usize, 49_usize));
 }
@@ -774,7 +807,7 @@ fn test_scroll_range() {
 #[test]
 fn test_scroll_range_2() {
     let mut code = Code::new();
-    let a = code.legalization_scroll_range(31, 64);
+    let a = code.legalization_vertical_scroll_range(31, 64);
     println! {"let {:?}",a};
     assert!(a == (16_usize, 49_usize));
 }
@@ -782,7 +815,7 @@ fn test_scroll_range_2() {
 #[test]
 fn test_scroll_range_3() {
     let mut code = Code::new();
-    let a = code.legalization_scroll_range(31, 2);
+    let a = code.legalization_vertical_scroll_range(31, 2);
     println! {"let {:?}",a};
     assert!(a == (16_usize, 16_usize));
 }
@@ -791,7 +824,7 @@ fn test_scroll_range_3() {
 fn test_show_file_range() {
     let mut code = Code::new();
     code.vertical_scroll = 0;
-    code.legalization_scroll_range(32, 64);
+    code.legalization_vertical_scroll_range(32, 64);
     let a = code.get_windows_show_file_range(32);
     println! {"let {:?}",a};
     assert!(a == (1_usize, 33_usize));
@@ -801,7 +834,7 @@ fn test_show_file_range() {
 fn test_show_file_range_2() {
     let mut code = Code::new();
     code.vertical_scroll = 200;
-    code.legalization_scroll_range(32, 64);
+    code.legalization_vertical_scroll_range(32, 64);
     let a = code.get_windows_show_file_range(32);
     println! {"let {:?}",a};
     assert!(a == (33_usize, 65_usize));
@@ -811,7 +844,7 @@ fn test_show_file_range_2() {
 fn test_show_file_range_3() {
     let mut code = Code::new();
     code.vertical_scroll = 20;
-    code.legalization_scroll_range(32, 64);
+    code.legalization_vertical_scroll_range(32, 64);
     let a = code.get_windows_show_file_range(32);
     println! {"let {:?}",a};
     assert!(a == (4_usize, 36_usize));
@@ -821,7 +854,7 @@ fn test_show_file_range_3() {
 fn test_show_file_range_4() {
     let mut code = Code::new();
     code.vertical_scroll = 20;
-    code.legalization_scroll_range(31, 64);
+    code.legalization_vertical_scroll_range(31, 64);
     let a = code.get_windows_show_file_range(31);
     println! {"let {:?}",a};
     assert!(a == (5_usize, 36_usize));

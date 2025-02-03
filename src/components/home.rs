@@ -8,6 +8,7 @@ use symbols::scrollbar;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::debug;
 // use tracing::debug;
+use crate::app::Mode;
 use crate::tool;
 use serde::{Deserialize, Serialize};
 use strum::Display;
@@ -24,6 +25,7 @@ pub struct Home {
     vertical_scroll: usize,
     area: Rect,
     area_change_time: Option<Instant>,
+    mode: Mode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
@@ -44,7 +46,11 @@ impl Home {
             area: s.area,
             vt100_parser_buffer: s.vt100_parser_buffer,
             area_change_time: None,
+            mode: s.mode,
         }
+    }
+    pub fn set_mode(&mut self, mode: Mode) {
+        self.mode = mode;
     }
     fn get_text_hight(&mut self, _area: &Rect) -> usize {
         let now_scrollback = self.vt100_parser.screen().scrollback();
@@ -91,7 +97,7 @@ impl Home {
     fn draw_cmd(&mut self, frame: &mut Frame, area: Rect) {
         self.vt100_parser.set_scrollback(self.vertical_scroll);
         let screen = self.vt100_parser.screen();
-        let cursor_show = self.vertical_scroll == 0;
+        let cursor_show = self.vertical_scroll == 0 && self.mode == Mode::Gdb;
         let pseudo_term = PseudoTerminal::new(screen)
             .cursor(tui_term::widget::Cursor::default().visibility(cursor_show))
             .style(
@@ -178,6 +184,7 @@ impl Component for Home {
             action::Action::Home(Action::Down(s)) => {
                 self.scroll_down(s);
             }
+            action::Action::Mode(mode) => self.set_mode(mode),
             action::Action::Gdbtty(gdbtty::Action::Out(out)) => {
                 self.vt100_parser_buffer.append(out.clone().as_mut());
                 self.vt100_parser.process(out.as_slice());
