@@ -2,7 +2,10 @@ use anyhow::Result;
 use vergen_gix::{BuildBuilder, CargoBuilder, Emitter, GixBuilder};
 
 fn main() -> Result<()> {
-    lalrpop::process_root().unwrap();
+    lalrpop::Configuration::new()
+        .use_cargo_dir_conventions()
+        .process_current_dir()
+        .unwrap();
     let build = BuildBuilder::all_build()?;
     let gix = GixBuilder::all_git()?;
     let cargo = CargoBuilder::all_cargo()?;
