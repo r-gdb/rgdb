@@ -2,11 +2,14 @@
 name = "rgdb"
 version = "0.1.0"
 edition = "2021"
-description = "this is rgdb"
+description = "RGDB is a console frontend for GNU debugger"
 authors = ["shizhilvren"]
 build = "build.rs"
 license = "MIT"
-
+repository = "https://github.com/r-gdb/rgdb"
+exclude = [
+    "doc/*",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
