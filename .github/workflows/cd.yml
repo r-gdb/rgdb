@@ -28,19 +28,47 @@ jobs:
             binary-postfix: ""
             use-cross: false
             binary-name: rgdb
-          - os: ubuntu-latest
+          - os: ubuntu-latest-x86_64
             os-name: linux
             target: x86_64-unknown-linux-gnu
             architecture: x86_64
             binary-postfix: ""
             use-cross: false
             binary-name: rgdb
-          - os: ubuntu-latest
+          - os: ubuntu-latest-x86_64-musl
             os-name: linux
             target: x86_64-unknown-linux-musl
             architecture: x86_64
             binary-postfix: "musl"
             use-cross: false
+            binary-name: rgdb
+          - os: ubuntu-latest-aarch64
+            os-name: linux
+            target: aarch64-unknown-linux-gnu
+            architecture: arm64
+            binary-postfix: ""
+            use-cross: true
+            binary-name: rgdb
+          - os: ubuntu-latest-aarch64-musl
+            os-name: linux
+            target: aarch64-unknown-linux-musl
+            architecture: arm64
+            binary-postfix: "musl"
+            use-cross: true
+            binary-name: rgdb
+          - os: ubuntu-latest-i686
+            os-name: linux
+            target: i686-unknown-linux-gnu
+            architecture: i686
+            binary-postfix: ""
+            use-cross: true
+            binary-name: rgdb
+          - os: ubuntu-latest-i686-musl
+            os-name: linux
+            target: i686-unknown-linux-musl
+            architecture: i686
+            binary-postfix: "musl"
+            use-cross: true
             binary-name: rgdb
           # - os: windows-latest
           #   os-name: windows
@@ -49,21 +77,6 @@ jobs:
           #   binary-postfix: ".exe"
           #   use-cross: false
           #   binary-name: rgdb
-          - os: ubuntu-latest
-            os-name: linux
-            target: aarch64-unknown-linux-gnu
-            architecture: arm64
-            binary-postfix: ""
-            use-cross: true
-            binary-name: rgdb
-          - os: ubuntu-latest
-            os-name: linux
-            target: i686-unknown-linux-gnu
-            architecture: i686
-            binary-postfix: ""
-            use-cross: true
-            binary-name: rgdb
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -98,6 +111,8 @@ jobs:
               sudo apt update
               sudo apt-get install -y binutils-aarch64-linux-gnu
           fi
+          sudo apt-get install -y musl-gcc
+          
       - name: Packaging final binary
         shell: bash
         run: |
@@ -118,7 +133,7 @@ jobs:
 
           ########## create tar.gz ##########
 
-          RELEASE_NAME=${{ matrix.binary-name }}-${GITHUB_REF/refs\/tags\//}-${{ matrix.os-name }}-${{ matrix.architecture }}
+          RELEASE_NAME=${{ matrix.binary-name }}-${GITHUB_REF/refs\/tags\//}-${{ matrix.os-name }}-${{ matrix.architecture }}-${{ matrix.binary-postfix }}
 
           tar czvf $RELEASE_NAME.tar.gz $BINARY_NAME
 
