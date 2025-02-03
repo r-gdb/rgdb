@@ -63,12 +63,12 @@ impl Home {
     }
     fn set_area(&mut self, area: &layout::Size) {
         let area = Rect::new(0, 0, area.width, area.height);
-        let [_, _, area] = tool::get_layout(area);
+        let [_, _, area, _] = tool::get_layout(area);
         self.area = area;
     }
     fn set_vt100_area(&mut self, area: &layout::Size) {
         let area = Rect::new(0, 0, area.width, area.height);
-        let [_, _, area] = tool::get_layout(area);
+        let [_, _, area, _] = tool::get_layout(area);
         let in_size = area
             .inner(Margin {
                 vertical: 0,
@@ -203,7 +203,7 @@ impl Component for Home {
                 }
             }
         }
-        let [_, _, area] = tool::get_layout(area);
+        let [_, _, area, _] = tool::get_layout(area);
         let n = self.get_text_hight(&area);
         self.set_scroll_bar_status(n);
         self.draw_cmd(frame, area);

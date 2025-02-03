@@ -36,7 +36,7 @@ impl StartPage {
 
     fn draw_all(&mut self, frame: &mut Frame, area: Rect) {
         if self.is_start() {
-            let [area, area_status, _] = tool::get_layout(area);
+            let [area, area_status, _, _] = tool::get_layout(area);
             let [_, area, area_version] = Layout::vertical([
                 Constraint::Percentage(25),
                 Constraint::Percentage(30),

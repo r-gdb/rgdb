@@ -9,11 +9,12 @@ pub fn get_pty_name(fd: i32) -> Result<String> {
     Ok(c_str.to_string())
 }
 
-pub fn get_layout(area: Rect) -> [Rect; 3] {
+pub fn get_layout(area: Rect) -> [Rect; 4] {
     Layout::vertical([
         Constraint::Percentage(50),
         Constraint::Length(1),
         Constraint::Fill(1),
+        Constraint::Length(1),
     ])
     .areas(area)
 }

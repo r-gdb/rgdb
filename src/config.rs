@@ -505,11 +505,94 @@ mod tests {
         let c = Config::new()?;
         assert_eq!(
             c.keybindings
-                .get(&Mode::Home)
+                .get(&Mode::Gdb)
                 .unwrap()
                 .get(&parse_key_sequence("<Ctrl-q>").unwrap_or_default())
                 .unwrap(),
             &Action::Quit
+        );
+        Ok(())
+    }
+    #[test]
+    fn test_config_1() -> Result<()> {
+        println!(
+            "abcs {:?}",
+            serde_json::to_string(&Action::Mode(crate::app::Mode::Code))
+        );
+        let c = Config::new()?;
+        assert_eq!(
+            c.keybindings
+                .get(&Mode::Gdb)
+                .unwrap()
+                .get(&parse_key_sequence("<Esc>").unwrap_or_default())
+                .unwrap(),
+            &Action::Mode(crate::app::Mode::Code)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_config_2() -> Result<()> {
+        println!(
+            "abcs {:?}",
+            serde_json::to_string(&Action::Mode(crate::app::Mode::Code))
+        );
+        let c = Config::new()?;
+        assert_eq!(
+            c.keybindings
+                .get(&Mode::Gdb)
+                .unwrap()
+                .get(&parse_key_sequence("<Ctrl+z>").unwrap_or_default())
+                .unwrap(),
+            &Action::Suspend
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_config_3() -> Result<()> {
+        println!(
+            "abcs {:?}",
+            serde_json::to_string(&Action::Mode(crate::app::Mode::Code))
+        );
+        let c = Config::new()?;
+        assert_eq!(
+            c.keybindings
+                .get(&Mode::Code)
+                .unwrap()
+                .get(&parse_key_sequence("<Esc>").unwrap_or_default())
+                .unwrap(),
+            &Action::Mode(crate::app::Mode::Gdb)
+        );
+        Ok(())
+    }
+    #[test]
+    fn test_config_4() -> Result<()> {
+        let c = Config::new()?;
+        assert_eq!(
+            c.keybindings
+                .get(&Mode::Code)
+                .unwrap()
+                .get(&parse_key_sequence("<Ctrl-q>").unwrap_or_default())
+                .unwrap(),
+            &Action::Quit
+        );
+        Ok(())
+    }
+    #[test]
+    fn test_config_5() -> Result<()> {
+        println!(
+            "test {:?}",
+            serde_json::to_string(&Action::Code(crate::components::code::Action::Up(3_usize)))
+        );
+        let c = Config::new()?;
+        assert_eq!(
+            c.keybindings
+                .get(&Mode::Code)
+                .unwrap()
+                .get(&parse_key_sequence("<Esc>").unwrap_or_default())
+                .unwrap(),
+            &Action::Mode(crate::app::Mode::Gdb)
         );
         Ok(())
     }

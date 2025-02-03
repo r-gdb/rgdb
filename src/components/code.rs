@@ -29,6 +29,7 @@ pub struct Code {
     file_need_show: Option<(String, u64)>,
     vertical_scroll_state: ScrollbarState,
     vertical_scroll: usize,
+    horizontial_scroll: usize,
     area: Rect,
 }
 
@@ -40,6 +41,8 @@ pub enum Action {
     FilehighlightEnd(String),
     Up(usize),
     Down(usize),
+    Left(usize),
+    Right(usize),
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -295,7 +298,7 @@ impl Code {
     }
     fn set_area(&mut self, area: &layout::Size) {
         let area = Rect::new(0, 0, area.width, area.height);
-        let [area, _, _] = tool::get_layout(area);
+        let [area, _, _, _] = tool::get_layout(area);
         self.area = area;
     }
     fn file_down(&mut self, n: usize) {
@@ -686,7 +689,7 @@ impl Component for Code {
         let ans = self.get_need_show_file().map(|(file, _line_id)| {
             let n = file.get_lines_len();
             let num_len = n.to_string().len() as u16;
-            let [area, area_status, _] = tool::get_layout(area);
+            let [area, area_status, _, _] = tool::get_layout(area);
             let [area_ids, area_split, area_src] = Layout::horizontal([
                 Constraint::Min(num_len),
                 Constraint::Min(2),

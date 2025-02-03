@@ -24,6 +24,7 @@ pub struct Gdbtty {
     pty_pair: Option<PtyPair>,
     gdb_path: String,
     gdb_args: Vec<String>,
+    handle_key: bool,
 }
 
 impl Gdbtty {
@@ -212,6 +213,12 @@ impl Gdbtty {
         };
         Some(input_bytes)
     }
+    fn handle_key(&self) -> bool {
+        self.handle_key
+    }
+    fn set_handle_key(&mut self, val: bool) {
+        self.handle_key = val;
+    }
 }
 
 impl Component for Gdbtty {
@@ -226,7 +233,7 @@ impl Component for Gdbtty {
     }
 
     fn draw(&mut self, _frame: &mut Frame, area: Rect) -> Result<()> {
-        let [_, _, area] = tool::get_layout(area);
+        let [_, _, area, _] = tool::get_layout(area);
         let area = area.inner(Margin {
             horizontal: 1,
             vertical: 1,
@@ -248,12 +255,14 @@ impl Component for Gdbtty {
         &mut self,
         key: crossterm::event::KeyEvent,
     ) -> Result<Option<action::Action>> {
-        if let Some(bytes) = Gdbtty::handle_pane_key_event(&key) {
-            let bytes = bytes.into_iter().map(char::from).collect::<String>();
-            if let Some(write) = self.gdb_writer.as_mut() {
-                write!(write, "{}", bytes.as_str())?;
-            }
-        };
+        if self.handle_key() {
+            if let Some(bytes) = Gdbtty::handle_pane_key_event(&key) {
+                let bytes = bytes.into_iter().map(char::from).collect::<String>();
+                if let Some(write) = self.gdb_writer.as_mut() {
+                    write!(write, "{}", bytes.as_str())?;
+                }
+            };
+        }
         Ok(None)
     }
 
@@ -269,13 +278,20 @@ impl Component for Gdbtty {
             }
             action::Action::Gdbtty(Action::Start(pts_path)) => {
                 self.gdbtty_start(pts_path)?;
-                None
+                Some(action::Action::Mode(crate::app::Mode::Gdb))
             }
             action::Action::Tick => match self.is_gdb_exit() {
                 true => Some(action::Action::Gdbtty(Action::GdbExit)),
                 false => None,
             },
             action::Action::Gdbtty(Action::GdbExit) => Some(action::Action::Quit),
+            action::Action::Mode(mode) => {
+                match mode {
+                    crate::app::Mode::Gdb => self.set_handle_key(true),
+                    _ => self.set_handle_key(false),
+                };
+                None
+            }
             _ => None,
         };
         Ok(ans)

@@ -4,7 +4,7 @@ use crate::{
     action,
     components::{
         code::Code, fps::FpsCounter, gdbmi::Gdbmi, gdbtty::Gdbtty, home::Home,
-        startpage::StartPage, Component,
+        startpage::StartPage, statusbar::StatusBar, Component,
     },
     config::Config,
     tui::{Event, Tui},
@@ -34,7 +34,8 @@ pub struct App {
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Mode {
     #[default]
-    Home,
+    Gdb,
+    Code,
 }
 
 impl App {
@@ -49,17 +50,18 @@ impl App {
             tick_rate,
             frame_rate,
             components: vec![
-                Box::new(Home::new()),
-                Box::new(Code::new()),
+                Box::new(Home::default()),
+                Box::new(Code::default()),
                 Box::new(FpsCounter::default()),
-                Box::new(Gdbmi::new()),
-                Box::new(Gdbtty::new()),
-                Box::new(StartPage::new()),
+                Box::new(Gdbmi::default()),
+                Box::new(Gdbtty::default()),
+                Box::new(StartPage::default()),
+                Box::new(StatusBar::default()),
             ],
             should_quit: false,
             should_suspend: false,
             config: Config::new()?,
-            mode: Mode::Home,
+            mode: Mode::Gdb,
             last_tick_key_events: Vec::new(),
             action_tx,
             action_rx,
@@ -68,6 +70,9 @@ impl App {
         })
     }
 
+    pub fn set_mode(&mut self, mode: Mode) {
+        self.mode = mode;
+    }
     pub async fn run(&mut self) -> Result<()> {
         let mut tui = Tui::new()?
             // .mouse(true) // uncomment this line to enable mouse support
@@ -167,6 +172,7 @@ impl App {
                 action::Action::ClearScreen => tui.terminal.clear()?,
                 action::Action::Resize(w, h) => self.handle_resize(tui, w, h)?,
                 action::Action::Render => self.render(tui)?,
+                action::Action::Mode(mode) => self.set_mode(mode),
                 _ => {}
             }
             for component in self.components.iter_mut() {
