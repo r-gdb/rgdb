@@ -634,6 +634,9 @@ impl Component for Code {
             action::Action::Render => {
                 // add any logic here that should run on every render
             }
+            action::Action::Resize(x, y) => {
+                self.set_area(&layout::Size::new(x, y));
+            }
             action::Action::Code(Action::Up(p)) => {
                 self.file_up(p);
             }
