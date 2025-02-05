@@ -238,6 +238,40 @@ impl Code {
             error!("file {} not have extension", &file_name);
         }
     }
+    fn read_file_filter(line: String) -> String {
+        line.replace("\u{0}", r##"\{NUL}"##)
+            .replace("\u{1}", r##"\{SOH}"##)
+            .replace("\u{2}", r##"\{STX}"##)
+            .replace("\u{3}", r##"\{ETX}"##)
+            .replace("\u{4}", r##"\{EOT}"##)
+            .replace("\u{5}", r##"\{ENQ}"##)
+            .replace("\u{6}", r##"\{ACK}"##)
+            .replace("\u{7}", r##"\{BEL}"##)
+            .replace("\u{8}", r##"\{BS}"##)
+            .replace("\t", "    ") // \u{9}
+            .replace("\u{b}", r##"\{VT}"##)
+            .replace("\u{c}", r##"\{FF}"##)
+            .replace("\r", "") //\u{d}
+            .replace("\u{e}", r##"\{SO}"##)
+            .replace("\u{f}", r##"\{SI}"##)
+            .replace("\u{10}", r##"\{DLE}"##)
+            .replace("\u{11}", r##"\{DC1}"##)
+            .replace("\u{12}", r##"\{DC2}"##)
+            .replace("\u{13}", r##"\{DC3}"##)
+            .replace("\u{14}", r##"\{DC4}"##)
+            .replace("\u{15}", r##"\{NAK}"##)
+            .replace("\u{16}", r##"\{SYN}"##)
+            .replace("\u{17}", r##"\{ETB}"##)
+            .replace("\u{18}", r##"\{CAN}"##)
+            .replace("\u{19}", r##"\{EM}"##)
+            .replace("\u{1a}", r##"\{SUB}"##)
+            .replace("\u{1b}", r##"\{ESC}"##)
+            .replace("\u{1c}", r##"\{FS}"##)
+            .replace("\u{1d}", r##"\{GS}"##)
+            .replace("\u{1e}", r##"\{RS}"##)
+            .replace("\u{1f}", r##"\{US}"##)
+            .replace("\u{7f}", r##"\{DEL}"##)
+    }
     async fn read_file(file: String, send: UnboundedSender<action::Action>) {
         match File::open(&file).await {
             std::result::Result::Ok(f) => {
@@ -255,8 +289,7 @@ impl Code {
                             break;
                         }
                         std::result::Result::Ok(_n) => {
-                            line = line.replace("\t", "    ");
-                            line = line.replace("\u{c}", r##"\u{FF}"##); // change \f 0xC
+                            line = Self::read_file_filter(line);
                             match send.send(action::Action::Code(Action::FileReadOneLine((
                                 file.clone(),
                                 line,
@@ -797,181 +830,228 @@ impl Component for Code {
     }
 }
 
-#[test]
-fn test_scroll_range() {
-    let mut code = Code::default();
-    let a = code.legalization_vertical_scroll_range(32, 64);
-    println! {"let {:?}",a};
-    assert!(a == (17_usize, 49_usize));
-}
+#[cfg(test)]
+mod tests {
+    use crate::components::code::BreakPointData;
+    use crate::components::code::Code;
+    use crate::components::code::SrcFileData;
+    use crate::mi::breakpointmi::{BreakPointAction, BreakPointSignalAction};
+    use std::collections::HashMap;
+    #[test]
+    fn test_crtl_ascii_00_0f() {
+        let line = "\u{0}\u{1}\u{2}\u{3}\u{4}\u{5}\u{6}\u{7}\u{8}\u{b}\u{c}\r\u{e}\u{f}";
+        let line = Code::read_file_filter(line.to_string());
+        println!("{:?}", line);
+        assert!(
+            line == r##"\{NUL}\{SOH}\{STX}\{ETX}\{EOT}\{ENQ}\{ACK}\{BEL}\{BS}\{VT}\{FF}\{SO}\{SI}"##
+        );
+    }
+    #[test]
 
-#[test]
-fn test_scroll_range_2() {
-    let mut code = Code::new();
-    let a = code.legalization_vertical_scroll_range(31, 64);
-    println! {"let {:?}",a};
-    assert!(a == (16_usize, 49_usize));
-}
+    fn test_crtl_ascii_10_1f() {
+        let line = "\u{10}\u{11}\u{12}\u{13}\u{14}\u{15}\u{16}\u{17}\u{18}\u{19}\u{1a}\u{1b}\u{1c}\u{1d}\u{1e}\u{1f}\u{7f}";
+        let line = Code::read_file_filter(line.to_string());
+        assert!(
+            line == r##"\{DLE}\{DC1}\{DC2}\{DC3}\{DC4}\{NAK}\{SYN}\{ETB}\{CAN}\{EM}\{SUB}\{ESC}\{FS}\{GS}\{RS}\{US}\{DEL}"##
+        );
+    }
+    #[test]
+    fn test_crtl_ascii_7f() {
+        let line = "\u{7f}";
+        let line = Code::read_file_filter(line.to_string());
+        assert!(line == r##"\{DEL}"##);
+    }
+    #[test]
+    fn test_crtl_ascii_tab() {
+        let line = "\t";
+        let line = Code::read_file_filter(line.to_string());
+        assert!(line == "    ");
+    }
+    #[test]
+    fn test_scroll_range() {
+        let mut code = Code::default();
+        let a = code.legalization_vertical_scroll_range(32, 64);
+        println! {"let {:?}",a};
+        assert!(a == (17_usize, 49_usize));
+    }
 
-#[test]
-fn test_scroll_range_3() {
-    let mut code = Code::new();
-    let a = code.legalization_vertical_scroll_range(31, 2);
-    println! {"let {:?}",a};
-    assert!(a == (16_usize, 16_usize));
-}
+    #[test]
+    fn test_scroll_range_2() {
+        let mut code = Code::new();
+        let a = code.legalization_vertical_scroll_range(31, 64);
+        println! {"let {:?}",a};
+        assert!(a == (16_usize, 49_usize));
+    }
 
-#[test]
-fn test_show_file_range() {
-    let mut code = Code::new();
-    code.vertical_scroll = 0;
-    code.legalization_vertical_scroll_range(32, 64);
-    let a = code.get_windows_show_file_range(32);
-    println! {"let {:?}",a};
-    assert!(a == (1_usize, 33_usize));
-}
+    #[test]
+    fn test_scroll_range_3() {
+        let mut code = Code::new();
+        let a = code.legalization_vertical_scroll_range(31, 2);
+        println! {"let {:?}",a};
+        assert!(a == (16_usize, 16_usize));
+    }
 
-#[test]
-fn test_show_file_range_2() {
-    let mut code = Code::new();
-    code.vertical_scroll = 200;
-    code.legalization_vertical_scroll_range(32, 64);
-    let a = code.get_windows_show_file_range(32);
-    println! {"let {:?}",a};
-    assert!(a == (33_usize, 65_usize));
-}
+    #[test]
+    fn test_show_file_range() {
+        let mut code = Code::new();
+        code.vertical_scroll = 0;
+        code.legalization_vertical_scroll_range(32, 64);
+        let a = code.get_windows_show_file_range(32);
+        println! {"let {:?}",a};
+        assert!(a == (1_usize, 33_usize));
+    }
 
-#[test]
-fn test_show_file_range_3() {
-    let mut code = Code::new();
-    code.vertical_scroll = 20;
-    code.legalization_vertical_scroll_range(32, 64);
-    let a = code.get_windows_show_file_range(32);
-    println! {"let {:?}",a};
-    assert!(a == (4_usize, 36_usize));
-}
+    #[test]
+    fn test_show_file_range_2() {
+        let mut code = Code::new();
+        code.vertical_scroll = 200;
+        code.legalization_vertical_scroll_range(32, 64);
+        let a = code.get_windows_show_file_range(32);
+        println! {"let {:?}",a};
+        assert!(a == (33_usize, 65_usize));
+    }
 
-#[test]
-fn test_show_file_range_4() {
-    let mut code = Code::new();
-    code.vertical_scroll = 20;
-    code.legalization_vertical_scroll_range(31, 64);
-    let a = code.get_windows_show_file_range(31);
-    println! {"let {:?}",a};
-    assert!(a == (5_usize, 36_usize));
-}
+    #[test]
+    fn test_show_file_range_3() {
+        let mut code = Code::new();
+        code.vertical_scroll = 20;
+        code.legalization_vertical_scroll_range(32, 64);
+        let a = code.get_windows_show_file_range(32);
+        println! {"let {:?}",a};
+        assert!(a == (4_usize, 36_usize));
+    }
 
-#[test]
-fn test_file_range_1() {
-    let mut file = SrcFileData::new("a".to_string());
-    (1..62).for_each(|i| {
-        file.add_line(format!("{:?}\n", i));
-    });
-    file.set_read_done();
-    let (src, s, e) = file.get_lines_range(4_usize, 36_usize);
-    assert!(s == 4_usize);
-    assert!(e == 36_usize);
-    println!("file range{:?} {} {}", src, s, e);
-    (4..37).zip(src.iter()).for_each(|(i, s)| {
-        assert!(format!("{:?}\n", i) == **s);
-    });
-}
+    #[test]
+    fn test_show_file_range_4() {
+        let mut code = Code::new();
+        code.vertical_scroll = 20;
+        code.legalization_vertical_scroll_range(31, 64);
+        let a = code.get_windows_show_file_range(31);
+        println! {"let {:?}",a};
+        assert!(a == (5_usize, 36_usize));
+    }
 
-#[test]
-fn test_file_range_2() {
-    let mut file = SrcFileData::new("a".to_string());
-    (1..62).for_each(|i| {
-        file.add_line(format!("{:?}\n", i));
-    });
-    file.set_read_done();
-    let (src, s, e) = file.get_lines_range(50_usize, 65_usize);
-    println!("file range{:?} {} {}", src, s, e);
-    assert!(s == 50_usize);
-    assert!(e == 62_usize);
-    (50..62).zip(src.iter()).for_each(|(i, s)| {
-        assert!(format!("{:?}\n", i) == **s);
-    });
-}
+    #[test]
+    fn test_file_range_1() {
+        let mut file = SrcFileData::new("a".to_string());
+        (1..62).for_each(|i| {
+            file.add_line(format!("{:?}\n", i));
+        });
+        file.set_read_done();
+        let (src, s, e) = file.get_lines_range(4_usize, 36_usize);
+        assert!(s == 4_usize);
+        assert!(e == 36_usize);
+        println!("file range{:?} {} {}", src, s, e);
+        (4..37).zip(src.iter()).for_each(|(i, s)| {
+            assert!(format!("{:?}\n", i) == **s);
+        });
+    }
 
-#[test]
-fn f_breakpoint_range() {
-    use crate::mi::breakpointmi::BreakPointMultipleAction;
-    let a = BreakPointAction::Multiple(BreakPointMultipleAction {
-        number: "5".to_string(),
-        enabled: false,
-        bps: vec![
-            BreakPointSignalAction {
-                number: "5.1".to_string(),
-                enabled: true,
-                line: 34_u64,
-                fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-            },
-            BreakPointSignalAction {
-                number: "5.1".to_string(),
-                enabled: false,
-                line: 34_u64,
-                fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-            },
-        ],
-    });
-    let a = BreakPointData::from(&a);
-    let mut code = Code::new();
-    code.breakpoint_set.insert(a.get_key(), a);
-    let ans =
-        code.get_breakpoint_in_file_range(&"/home/shizhilvren/tmux/environ.c".to_string(), 22, 39);
-    assert!(ans == HashMap::from([(34_u64, false)]));
-}
+    #[test]
+    fn test_file_range_2() {
+        let mut file = SrcFileData::new("a".to_string());
+        (1..62).for_each(|i| {
+            file.add_line(format!("{:?}\n", i));
+        });
+        file.set_read_done();
+        let (src, s, e) = file.get_lines_range(50_usize, 65_usize);
+        println!("file range{:?} {} {}", src, s, e);
+        assert!(s == 50_usize);
+        assert!(e == 62_usize);
+        (50..62).zip(src.iter()).for_each(|(i, s)| {
+            assert!(format!("{:?}\n", i) == **s);
+        });
+    }
 
-#[test]
-fn f_breakpoint_range_2() {
-    use crate::mi::breakpointmi::BreakPointMultipleAction;
-    let a = BreakPointAction::Multiple(BreakPointMultipleAction {
-        number: "5".to_string(),
-        enabled: true,
-        bps: vec![
-            BreakPointSignalAction {
-                number: "5.1".to_string(),
-                enabled: true,
-                line: 34_u64,
-                fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-            },
-            BreakPointSignalAction {
-                number: "5.1".to_string(),
-                enabled: false,
-                line: 34_u64,
-                fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-            },
-        ],
-    });
+    #[test]
+    fn f_breakpoint_range() {
+        use crate::mi::breakpointmi::BreakPointMultipleAction;
+        let a = BreakPointAction::Multiple(BreakPointMultipleAction {
+            number: "5".to_string(),
+            enabled: false,
+            bps: vec![
+                BreakPointSignalAction {
+                    number: "5.1".to_string(),
+                    enabled: true,
+                    line: 34_u64,
+                    fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+                },
+                BreakPointSignalAction {
+                    number: "5.1".to_string(),
+                    enabled: false,
+                    line: 34_u64,
+                    fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+                },
+            ],
+        });
+        let a = BreakPointData::from(&a);
+        let mut code = Code::new();
+        code.breakpoint_set.insert(a.get_key(), a);
+        let ans = code.get_breakpoint_in_file_range(
+            &"/home/shizhilvren/tmux/environ.c".to_string(),
+            22,
+            39,
+        );
+        assert!(ans == HashMap::from([(34_u64, false)]));
+    }
 
-    let a = BreakPointData::from(&a);
-    let mut code = Code::new();
-    code.breakpoint_set.insert(a.get_key(), a);
-    let ans =
-        code.get_breakpoint_in_file_range(&"/home/shizhilvren/tmux/environ.c".to_string(), 22, 39);
-    assert!(ans == HashMap::from([(34_u64, true)]));
-}
+    #[test]
+    fn f_breakpoint_range_2() {
+        use crate::mi::breakpointmi::BreakPointMultipleAction;
+        let a = BreakPointAction::Multiple(BreakPointMultipleAction {
+            number: "5".to_string(),
+            enabled: true,
+            bps: vec![
+                BreakPointSignalAction {
+                    number: "5.1".to_string(),
+                    enabled: true,
+                    line: 34_u64,
+                    fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+                },
+                BreakPointSignalAction {
+                    number: "5.1".to_string(),
+                    enabled: false,
+                    line: 34_u64,
+                    fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+                },
+            ],
+        });
 
-#[test]
-fn f_breakpoint_range_3() {
-    let a = BreakPointAction::Signal(BreakPointSignalAction {
-        number: "2".to_string(),
-        enabled: true,
-        line: 34_u64,
-        fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-    });
-    let b = BreakPointAction::Signal(BreakPointSignalAction {
-        number: "6".to_string(),
-        enabled: true,
-        line: 37_u64,
-        fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-    });
-    let a = BreakPointData::from(&a);
-    let b = BreakPointData::from(&b);
-    let mut code = Code::new();
-    code.breakpoint_set.insert(a.get_key(), a);
-    code.breakpoint_set.insert(b.get_key(), b);
-    let ans =
-        code.get_breakpoint_in_file_range(&"/home/shizhilvren/tmux/environ.c".to_string(), 22, 36);
-    assert!(ans == HashMap::from([(34_u64, true)]));
+        let a = BreakPointData::from(&a);
+        let mut code = Code::new();
+        code.breakpoint_set.insert(a.get_key(), a);
+        let ans = code.get_breakpoint_in_file_range(
+            &"/home/shizhilvren/tmux/environ.c".to_string(),
+            22,
+            39,
+        );
+        assert!(ans == HashMap::from([(34_u64, true)]));
+    }
+
+    #[test]
+    fn f_breakpoint_range_3() {
+        let a = BreakPointAction::Signal(BreakPointSignalAction {
+            number: "2".to_string(),
+            enabled: true,
+            line: 34_u64,
+            fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+        });
+        let b = BreakPointAction::Signal(BreakPointSignalAction {
+            number: "6".to_string(),
+            enabled: true,
+            line: 37_u64,
+            fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+        });
+        let a = BreakPointData::from(&a);
+        let b = BreakPointData::from(&b);
+        let mut code = Code::new();
+        code.breakpoint_set.insert(a.get_key(), a);
+        code.breakpoint_set.insert(b.get_key(), b);
+        let ans = code.get_breakpoint_in_file_range(
+            &"/home/shizhilvren/tmux/environ.c".to_string(),
+            22,
+            36,
+        );
+        assert!(ans == HashMap::from([(34_u64, true)]));
+    }
 }
