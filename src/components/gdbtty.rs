@@ -107,9 +107,12 @@ impl Gdbtty {
             .chain(gdb_args)
             .map(|s| -> Result<std::ffi::OsString> { Ok(std::ffi::OsString::from_str(s)?) })
             .collect::<Result<Vec<_>>>()?;
-        debug!("gdb tty start with {:?}", &args);
+        let cwd = std::env::current_dir()?;
+        debug!("gdb tty start with {:?} currect dir is {:?}", &args, &cwd);
         // Spawn a shell into the pty
-        let cmd = CommandBuilder::from_argv(args);
+        let mut cmd = CommandBuilder::from_argv(args);
+        cmd.cwd(cwd);
+        debug!("gdb tty start cwd id {:?}", &cmd.get_cwd());
         let child = pair
             .slave
             .spawn_command(cmd)
