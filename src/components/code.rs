@@ -256,6 +256,7 @@ impl Code {
                         }
                         std::result::Result::Ok(_n) => {
                             line = line.replace("\t", "    ");
+                            line = line.replace("\u{c}", r##"\u{FF}"##); // change \f 0xC
                             match send.send(action::Action::Code(Action::FileReadOneLine((
                                 file.clone(),
                                 line,
