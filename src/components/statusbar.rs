@@ -42,8 +42,8 @@ impl StatusBar {
     // }
     fn hit_text(&self) -> Vec<Span<'_>> {
         let hits = match self.mode {
-            Mode::Gdb => vec!["<Esc> CODE"],
-            Mode::Code => vec!["<←↓↑→> Scroll Code", "<Esc> GDB"],
+            Mode::Gdb => vec!["<Ctrl-q> Exit", "<Esc> CODE"],
+            Mode::Code => vec!["<←↓↑→> Scroll Code", "<Ctrl-q> Exit", "<Esc> GDB"],
         };
         hits.into_iter()
             .map(|hit| {
