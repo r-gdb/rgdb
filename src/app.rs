@@ -43,8 +43,17 @@ impl App {
         tick_rate: f64,
         frame_rate: f64,
         gdb_path: String,
+        args: Vec<String>,
         gdb_args: Vec<String>,
     ) -> Result<Self> {
+        let gdb_args = match args.is_empty() {
+            true => gdb_args,
+            false => gdb_args
+                .into_iter()
+                .chain(std::iter::once("--args".to_string()))
+                .chain(args.into_iter())
+                .collect::<Vec<_>>(),
+        };
         let (action_tx, action_rx) = mpsc::unbounded_channel();
         Ok(Self {
             tick_rate,

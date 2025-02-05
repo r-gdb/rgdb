@@ -3,6 +3,7 @@ use clap::Parser;
 use cli::Cli;
 use color_eyre::Result;
 use lalrpop_util::lalrpop_mod;
+use tracing::debug;
 lalrpop_mod!(
     #[allow(clippy::ptr_arg)]
     #[allow(clippy::vec_box)]
@@ -29,7 +30,14 @@ async fn main() -> Result<()> {
     crate::logging::init()?;
 
     let args = Cli::parse();
-    let mut app = App::new(args.tick_rate, args.frame_rate, args.gdb, args.gdb_args)?;
+    debug!("rgdb args are {:?}", &args);
+    let mut app = App::new(
+        args.tick_rate,
+        args.frame_rate,
+        args.gdb,
+        args.args,
+        args.gdb_args,
+    )?;
     app.run().await?;
     Ok(())
 }
