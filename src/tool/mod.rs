@@ -2,6 +2,8 @@ use color_eyre::{eyre::Ok, Result};
 use libc::ptsname;
 use ratatui::layout::{Constraint, Layout, Rect};
 use std::ffi::CStr;
+use std::hash::Hash;
+use std::rc::Rc;
 
 pub fn get_pty_name(fd: i32) -> Result<String> {
     let name = unsafe { ptsname(fd) };
@@ -17,4 +19,8 @@ pub fn get_layout(area: Rect) -> [Rect; 4] {
         Constraint::Length(1),
     ])
     .areas(area)
+}
+
+pub trait HashSelf<T: Hash> {
+    fn get_key(&self) -> Rc<T>;
 }

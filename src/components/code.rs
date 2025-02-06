@@ -2,6 +2,7 @@ use super::Component;
 use crate::components::gdbmi;
 use crate::mi::breakpointmi::{BreakPointAction, BreakPointMultipleAction, BreakPointSignalAction};
 use crate::tool;
+use crate::tool::HashSelf;
 use crate::{action, config::Config};
 use color_eyre::{eyre::Ok, Result};
 use ratatui::{prelude::*, widgets::*};
@@ -104,7 +105,8 @@ impl From<&BreakPointAction> for BreakPointData {
         }
     }
 }
-impl BreakPointData {
+
+impl crate::tool::HashSelf<String> for BreakPointData {
     fn get_key(&self) -> Rc<String> {
         match self {
             Self::Signal(p) => p.number.clone(),
@@ -177,6 +179,12 @@ impl SrcFileData {
             start,
             end,
         )
+    }
+}
+
+impl crate::tool::HashSelf<String> for SrcFileData {
+    fn get_key(&self) -> Rc<String> {
+        self.file_name.clone()
     }
 }
 
@@ -656,8 +664,7 @@ impl Component for Code {
                     false => {
                         if let Some(send) = self.command_tx.clone() {
                             let file_data = SrcFileData::new(file.clone());
-                            self.files_set
-                                .insert(file_data.file_name.clone(), file_data);
+                            self.files_set.insert(file_data.get_key(), file_data);
                             let read_therad = Self::read_file(file.clone(), send.clone());
                             tokio::spawn(async {
                                 read_therad.await;
@@ -839,6 +846,7 @@ mod tests {
     use crate::components::code::Code;
     use crate::components::code::SrcFileData;
     use crate::mi::breakpointmi::{BreakPointAction, BreakPointSignalAction};
+    use crate::tool::HashSelf;
     use std::collections::HashMap;
     #[test]
     fn test_crtl_ascii_00_0f() {
