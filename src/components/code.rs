@@ -3,6 +3,7 @@ use crate::components::gdbmi;
 use crate::mi::breakpointmi::{BreakPointAction, BreakPointMultipleAction, BreakPointSignalAction};
 use crate::tool;
 use crate::tool::HashSelf;
+use crate::tool::{HighlightFileData, TextFileData};
 use crate::{action, config::Config};
 use color_eyre::{eyre::Ok, Result};
 use ratatui::{prelude::*, widgets::*};
@@ -115,41 +116,20 @@ impl crate::tool::HashSelf<String> for BreakPointData {
     }
 }
 
-impl SrcFileData {
-    pub fn new(file_name: String) -> Self {
-        Self {
-            file_name: Rc::new(file_name),
-            lines: vec![],
-            lines_highlight: vec![],
-            read_done: false,
-            highlight_done: false,
-        }
-    }
-    pub fn add_line(&mut self, line: String) {
+impl TextFileData for SrcFileData {
+    fn add_line(&mut self, line: String) {
         self.lines.push(line);
     }
-    pub fn add_highlight_line(&mut self, line: Vec<(ratatui::style::Color, String)>) {
-        self.lines_highlight.push(line);
-    }
-    pub fn get_read_done(&self) -> bool {
+    fn get_read_done(&self) -> bool {
         self.read_done
     }
-    pub fn set_read_done(&mut self) {
+    fn set_read_done(&mut self) {
         self.read_done = true;
     }
-    pub fn get_highlight_done(&self) -> bool {
-        self.highlight_done
-    }
-    pub fn set_highlight_done(&mut self) {
-        self.highlight_done = true;
-    }
-    pub fn get_lines_len(&self) -> usize {
+    fn get_lines_len(&self) -> usize {
         self.lines.len()
     }
-    pub fn get_lines(&self) -> &Vec<String> {
-        self.lines.as_ref()
-    }
-    pub fn get_lines_range(&self, start: usize, end: usize) -> (Vec<&String>, usize, usize) {
+    fn get_lines_range(&self, start: usize, end: usize) -> (Vec<&String>, usize, usize) {
         let n = self.lines.len().saturating_add(1);
         let end = n.min(end);
         (
@@ -162,7 +142,22 @@ impl SrcFileData {
             end,
         )
     }
-    pub fn get_highlight_lines_range(
+}
+
+impl HighlightFileData for SrcFileData {
+    fn add_highlight_line(&mut self, line: Vec<(ratatui::style::Color, String)>) {
+        self.lines_highlight.push(line);
+    }
+    fn get_highlight_done(&self) -> bool {
+        self.highlight_done
+    }
+    fn set_highlight_done(&mut self) {
+        self.highlight_done = true;
+    }
+    fn get_lines(&self) -> &Vec<String> {
+        self.lines.as_ref()
+    }
+    fn get_highlight_lines_range(
         &self,
         start: usize,
         end: usize,
@@ -179,6 +174,18 @@ impl SrcFileData {
             start,
             end,
         )
+    }
+}
+
+impl SrcFileData {
+    pub fn new(file_name: String) -> Self {
+        Self {
+            file_name: Rc::new(file_name),
+            lines: vec![],
+            lines_highlight: vec![],
+            read_done: false,
+            highlight_done: false,
+        }
     }
 }
 
@@ -847,6 +854,7 @@ mod tests {
     use crate::components::code::SrcFileData;
     use crate::mi::breakpointmi::{BreakPointAction, BreakPointSignalAction};
     use crate::tool::HashSelf;
+    use crate::tool::{HighlightFileData, TextFileData};
     use std::collections::HashMap;
     #[test]
     fn test_crtl_ascii_00_0f() {

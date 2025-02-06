@@ -24,3 +24,23 @@ pub fn get_layout(area: Rect) -> [Rect; 4] {
 pub trait HashSelf<T: Hash> {
     fn get_key(&self) -> Rc<T>;
 }
+
+pub trait TextFileData {
+    fn add_line(&mut self, line: String);
+    fn get_read_done(&self) -> bool;
+    fn set_read_done(&mut self);
+    fn get_lines_len(&self) -> usize;
+    fn get_lines_range(&self, start: usize, end: usize) -> (Vec<&String>, usize, usize);
+}
+
+pub trait HighlightFileData {
+    fn add_highlight_line(&mut self, line: Vec<(ratatui::style::Color, String)>);
+    fn get_highlight_done(&self) -> bool;
+    fn set_highlight_done(&mut self);
+    fn get_lines(&self) -> &Vec<String>;
+    fn get_highlight_lines_range(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> (Vec<Vec<(ratatui::style::Color, String)>>, usize, usize);
+}
