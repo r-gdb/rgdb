@@ -854,7 +854,7 @@ mod tests {
     use crate::components::code::SrcFileData;
     use crate::mi::breakpointmi::{BreakPointAction, BreakPointSignalAction};
     use crate::tool::HashSelf;
-    use crate::tool::{HighlightFileData, TextFileData};
+    use crate::tool::TextFileData;
     use std::collections::HashMap;
     #[test]
     fn test_crtl_ascii_00_0f() {

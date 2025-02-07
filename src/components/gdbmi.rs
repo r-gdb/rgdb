@@ -37,6 +37,7 @@ pub enum Action {
     Start,
     Out(String),
     ShowFile((String, u64)),
+    ShowAsm((String, String)),
     Breakpoint(BreakPointAction),
     BreakpointDeleted(u64),
 }
@@ -86,6 +87,8 @@ impl Gdbmi {
                     std::result::Result::Ok(a) => {
                         if let Some(show) = show_file(&a) {
                             actions.push(Action::ShowFile(show));
+                        } else if let Some(show) = show_asm(&a) {
+                            actions.push(Action::ShowAsm(show));
                         }
                         if let Some(bkpt) = show_bkpt(&a) {
                             actions.push(Action::Breakpoint(bkpt));
@@ -198,6 +201,49 @@ impl Component for Gdbmi {
     }
 }
 
+fn show_asm(a: &OutOfBandRecordType) -> Option<(String, String)> {
+    let get_from_frame = |r: &ResultType| -> Option<(String, String)> {
+        let mut addr = None;
+        let mut func = None;
+        if r.variable.as_str() == "frame" {
+            if let ValueType::Tuple(Tuple::Results(rs)) = &r.value {
+                rs.iter().for_each(|r| match r.variable.as_str() {
+                    "addr" => {
+                        if let ValueType::Const(f) = &r.value {
+                            addr = Some(f.clone())
+                        }
+                    }
+                    "func" => {
+                        if let ValueType::Const(f) = &r.value {
+                            func = Some(f.clone())
+                        }
+                    }
+                    _ => {}
+                });
+            }
+        }
+        match (func, addr) {
+            (Some(func), Some(addr)) => Some((func, addr)),
+            _ => None,
+        }
+    };
+    let mut ret = None;
+    let OutOfBandRecordType::AsyncRecord(a) = a;
+    match a {
+        AsyncRecordType::ExecAsyncOutput(a) => {
+            if a.async_output.async_class == AsyncClassType::Stopped {
+                a.async_output.resaults.iter().for_each(|r| {
+                    if let Some(a) = get_from_frame(r) {
+                        ret = Some(a);
+                    }
+                });
+            }
+        }
+        _ => {}
+    }
+    ret
+}
+
 fn show_file(a: &OutOfBandRecordType) -> Option<(String, u64)> {
     let get_from_frame = |r: &ResultType| -> Option<(String, u64)> {
         let mut file = "".to_string();
@@ -255,6 +301,7 @@ fn show_file(a: &OutOfBandRecordType) -> Option<(String, u64)> {
 
 #[cfg(test)]
 mod tests {
+    use crate::components::gdbmi::show_asm;
     use crate::components::gdbmi::show_file;
     use crate::miout;
     #[test]
@@ -274,5 +321,14 @@ mod tests {
         let b = show_file(a.as_ref().unwrap());
         println!("{:?} {:?}", &a, &b);
         assert!(b == Some(("/remote/x/x/code/c++/args.c".to_string(), 7_u64)));
+    }
+
+    #[test]
+    fn f_show_asm() {
+        let a = miout::TokOutOfBandRecordParser::new()
+            .parse("*stopped,reason=\"breakpoint-hit\",disp=\"del\",bkptno=\"1\",frame={addr=\"0x0000555555581c20\",func=\"main\",args=[],arch=\"i386:x86-64\"},thread-id=\"1\",stopped-threads=\"all\",core=\"5\"\n");
+        let b = show_asm(a.as_ref().unwrap());
+        println!("{:?} {:?}", &a, &b);
+        assert!(b == Some(("main".to_string(), "0x0000555555581c20".to_string())));
     }
 }
