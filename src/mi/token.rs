@@ -1,11 +1,3 @@
-use lalrpop_util::lalrpop_mod;
-lalrpop_mod!(
-    #[allow(clippy::ptr_arg)]
-    #[allow(clippy::vec_box)]
-    miout,
-    "/mi/miout.rs"
-);
-
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Tok {
     Eq,
@@ -124,6 +116,7 @@ pub fn vec_string_to_string(s: Vec<String>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mi::miout;
     #[test]
     fn f_string_char_1() {
         let s = r#"c"#;

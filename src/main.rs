@@ -2,14 +2,8 @@ use crate::app::App;
 use clap::Parser;
 use cli::Cli;
 use color_eyre::Result;
-use lalrpop_util::lalrpop_mod;
 use tracing::debug;
-lalrpop_mod!(
-    #[allow(clippy::ptr_arg)]
-    #[allow(clippy::vec_box)]
-    miout,
-    "/mi/miout.rs"
-);
+
 mod action;
 mod app;
 mod cli;

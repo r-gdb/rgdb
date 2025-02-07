@@ -3,7 +3,6 @@ use crate::tool;
 use crate::{action, config::Config};
 // use bytes;
 use color_eyre::{eyre::eyre, eyre::Ok, Result};
-use lalrpop_util::lalrpop_mod;
 use smol::io::AsyncReadExt;
 
 use portable_pty::{native_pty_system, PtySize};
@@ -13,13 +12,9 @@ use strum::Display;
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tracing::error;
 use tracing::{debug, info};
-lalrpop_mod!(
-    #[allow(clippy::ptr_arg)]
-    #[allow(clippy::vec_box)]
-    miout,
-    "/mi/miout.rs"
-);
+
 use crate::mi::breakpointmi::{show_bkpt, show_breakpoint_deleted, BreakPointAction};
+use crate::mi::miout;
 use crate::mi::token::*;
 
 #[derive(Default)]
@@ -97,7 +92,7 @@ impl Gdbmi {
                             actions.push(Action::BreakpointDeleted(id));
                         }
                     }
-                    std::result::Result::Ok(OutputOneline::ResultRecord(a)) => {}
+                    std::result::Result::Ok(OutputOneline::ResultRecord(_a)) => {}
                     std::result::Result::Err(e) => {
                         error!("unknow read gdb mi line {} {:?} ", &e, &line);
                     }
@@ -196,9 +191,7 @@ impl Component for Gdbmi {
             }
             action::Action::Gdbmi(Action::ShowAsm((func, _))) => {
                 if let Some(write) = self.gdb_mi_writer.as_mut() {
-                    debug!("start writr something");
                     write!(write, "-data-disassemble -a {} -- 1\n", func)?;
-                    debug!("end writr something");
                 }
                 Ok(None)
             }
@@ -312,7 +305,7 @@ fn show_file(a: &OutOfBandRecordType) -> Option<(String, u64)> {
 mod tests {
     use crate::components::gdbmi::show_asm;
     use crate::components::gdbmi::show_file;
-    use crate::miout;
+    use crate::mi::miout;
     #[test]
     fn f_show_file() {
         let a = miout::TokOutOfBandRecordParser::new()

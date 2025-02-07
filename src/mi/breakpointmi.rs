@@ -1,15 +1,6 @@
 // use bytes;
-use lalrpop_util::lalrpop_mod;
-use serde::{Deserialize, Serialize};
-
-lalrpop_mod!(
-    #[allow(clippy::ptr_arg)]
-    #[allow(clippy::vec_box)]
-    miout,
-    "/mi/miout.rs"
-);
 use crate::mi::token::*;
-
+use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BreakPointMultipleAction {
     pub number: String,
@@ -209,165 +200,224 @@ pub fn show_bkpt(a: &OutOfBandRecordType) -> Option<BreakPointAction> {
     ret
 }
 
-#[test]
-fn f_breakpoint_created() {
-    let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-created,bkpt={number=\"1\",type=\"breakpoint\",disp=\"del\",enabled=\"y\",addr=\"0x0000000000404570\",func=\"main\",file=\"tmux.c\",fullname=\"/home/shizhilvren/tmux/tmux.c\",line=\"355\",thread-groups=[\"i1\"],times=\"0\",original-location=\"main\"}\n" );
-    println!("{:?}", &a);
-    assert!(
-        a.unwrap()
-            == OutOfBandRecordType::AsyncRecord(AsyncRecordType::NotifyAsyncOutput(
-                NotifyAsyncOutputType {
-                    async_output: AsyncOutputType {
-                        async_class: AsyncClassType::BreakpointCreated,
-                        values: vec![],
-                        resaults: vec![ResultType {
-                            variable: "bkpt".to_string(),
-                            value: ValueType::Tuple(Tuple::Results(vec![
-                                ResultType {
-                                    variable: "number".to_string(),
-                                    value: ValueType::Const("1".to_string()),
-                                },
-                                ResultType {
-                                    variable: "type".to_string(),
-                                    value: ValueType::Const("breakpoint".to_string()),
-                                },
-                                ResultType {
-                                    variable: "disp".to_string(),
-                                    value: ValueType::Const("del".to_string()),
-                                },
-                                ResultType {
-                                    variable: "enabled".to_string(),
-                                    value: ValueType::Const("y".to_string()),
-                                },
-                                ResultType {
-                                    variable: "addr".to_string(),
-                                    value: ValueType::Const("0x0000000000404570".to_string()),
-                                },
-                                ResultType {
-                                    variable: "func".to_string(),
-                                    value: ValueType::Const("main".to_string()),
-                                },
-                                ResultType {
-                                    variable: "file".to_string(),
-                                    value: ValueType::Const("tmux.c".to_string()),
-                                },
-                                ResultType {
-                                    variable: "fullname".to_string(),
-                                    value: ValueType::Const(
-                                        "/home/shizhilvren/tmux/tmux.c".to_string()
-                                    ),
-                                },
-                                ResultType {
-                                    variable: "line".to_string(),
-                                    value: ValueType::Const("355".to_string()),
-                                },
-                                ResultType {
-                                    variable: "thread-groups".to_string(),
-                                    value: ValueType::List(List::Values(vec![ValueType::Const(
-                                        "i1".to_string()
-                                    )])),
-                                },
-                                ResultType {
-                                    variable: "times".to_string(),
-                                    value: ValueType::Const("0".to_string()),
-                                },
-                                ResultType {
-                                    variable: "original-location".to_string(),
-                                    value: ValueType::Const("main".to_string()),
-                                },
-                            ])),
-                        }]
+#[cfg(test)]
+mod tests {
+    use crate::mi::breakpointmi::*;
+    use crate::mi::miout;
+    #[test]
+    fn f_breakpoint_created() {
+        let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-created,bkpt={number=\"1\",type=\"breakpoint\",disp=\"del\",enabled=\"y\",addr=\"0x0000000000404570\",func=\"main\",file=\"tmux.c\",fullname=\"/home/shizhilvren/tmux/tmux.c\",line=\"355\",thread-groups=[\"i1\"],times=\"0\",original-location=\"main\"}\n" );
+        println!("{:?}", &a);
+        assert!(
+            a.unwrap()
+                == OutOfBandRecordType::AsyncRecord(AsyncRecordType::NotifyAsyncOutput(
+                    NotifyAsyncOutputType {
+                        async_output: AsyncOutputType {
+                            async_class: AsyncClassType::BreakpointCreated,
+                            values: vec![],
+                            resaults: vec![ResultType {
+                                variable: "bkpt".to_string(),
+                                value: ValueType::Tuple(Tuple::Results(vec![
+                                    ResultType {
+                                        variable: "number".to_string(),
+                                        value: ValueType::Const("1".to_string()),
+                                    },
+                                    ResultType {
+                                        variable: "type".to_string(),
+                                        value: ValueType::Const("breakpoint".to_string()),
+                                    },
+                                    ResultType {
+                                        variable: "disp".to_string(),
+                                        value: ValueType::Const("del".to_string()),
+                                    },
+                                    ResultType {
+                                        variable: "enabled".to_string(),
+                                        value: ValueType::Const("y".to_string()),
+                                    },
+                                    ResultType {
+                                        variable: "addr".to_string(),
+                                        value: ValueType::Const("0x0000000000404570".to_string()),
+                                    },
+                                    ResultType {
+                                        variable: "func".to_string(),
+                                        value: ValueType::Const("main".to_string()),
+                                    },
+                                    ResultType {
+                                        variable: "file".to_string(),
+                                        value: ValueType::Const("tmux.c".to_string()),
+                                    },
+                                    ResultType {
+                                        variable: "fullname".to_string(),
+                                        value: ValueType::Const(
+                                            "/home/shizhilvren/tmux/tmux.c".to_string()
+                                        ),
+                                    },
+                                    ResultType {
+                                        variable: "line".to_string(),
+                                        value: ValueType::Const("355".to_string()),
+                                    },
+                                    ResultType {
+                                        variable: "thread-groups".to_string(),
+                                        value: ValueType::List(List::Values(vec![
+                                            ValueType::Const("i1".to_string())
+                                        ])),
+                                    },
+                                    ResultType {
+                                        variable: "times".to_string(),
+                                        value: ValueType::Const("0".to_string()),
+                                    },
+                                    ResultType {
+                                        variable: "original-location".to_string(),
+                                        value: ValueType::Const("main".to_string()),
+                                    },
+                                ])),
+                            }]
+                        }
                     }
-                }
-            ))
-    );
-}
+                ))
+        );
+    }
 
-#[test]
-fn f_breakpoint_modified() {
-    let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-modified,bkpt={}\n");
-    assert!(
-        a.unwrap()
-            == OutOfBandRecordType::AsyncRecord(AsyncRecordType::NotifyAsyncOutput(
-                NotifyAsyncOutputType {
-                    async_output: AsyncOutputType {
-                        async_class: AsyncClassType::BreakpointModified,
-                        values: vec![],
-                        resaults: vec![ResultType {
-                            variable: "bkpt".to_string(),
-                            value: ValueType::Tuple(Tuple::None),
-                        }]
+    #[test]
+    fn f_breakpoint_modified() {
+        let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-modified,bkpt={}\n");
+        assert!(
+            a.unwrap()
+                == OutOfBandRecordType::AsyncRecord(AsyncRecordType::NotifyAsyncOutput(
+                    NotifyAsyncOutputType {
+                        async_output: AsyncOutputType {
+                            async_class: AsyncClassType::BreakpointModified,
+                            values: vec![],
+                            resaults: vec![ResultType {
+                                variable: "bkpt".to_string(),
+                                value: ValueType::Tuple(Tuple::None),
+                            }]
+                        }
                     }
-                }
-            ))
-    );
-}
+                ))
+        );
+    }
 
-#[test]
-fn f_breakpoint_deleted() {
-    let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-deleted,id=\"1\"\n");
-    assert!(
-        a.unwrap()
-            == OutOfBandRecordType::AsyncRecord(AsyncRecordType::NotifyAsyncOutput(
-                NotifyAsyncOutputType {
-                    async_output: AsyncOutputType {
-                        async_class: AsyncClassType::BreakpointDeleted,
-                        values: vec![],
-                        resaults: vec![ResultType {
-                            variable: "id".to_string(),
-                            value: ValueType::Const("1".to_string()),
-                        }]
+    #[test]
+    fn f_breakpoint_deleted() {
+        let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-deleted,id=\"1\"\n");
+        assert!(
+            a.unwrap()
+                == OutOfBandRecordType::AsyncRecord(AsyncRecordType::NotifyAsyncOutput(
+                    NotifyAsyncOutputType {
+                        async_output: AsyncOutputType {
+                            async_class: AsyncClassType::BreakpointDeleted,
+                            values: vec![],
+                            resaults: vec![ResultType {
+                                variable: "id".to_string(),
+                                value: ValueType::Const("1".to_string()),
+                            }]
+                        }
                     }
-                }
-            ))
-    );
-}
+                ))
+        );
+    }
 
-#[test]
-fn f_breakpoint_created_2() {
-    let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-created,bkpt={number=\"1\",type=\"breakpoint\",disp=\"del\",enabled=\"y\",addr=\"0x0000000000404570\",func=\"main\",file=\"tmux.c\",fullname=\"/home/shizhilvren/tmux/tmux.c\",line=\"355\",thread-groups=[\"i1\"],times=\"0\",original-location=\"main\"}\n" );
-    let bkpt = show_bkpt(&a.unwrap());
-    assert!(
-        bkpt == Some(BreakPointAction::Signal(BreakPointSignalAction {
-            number: "1".to_string(),
-            enabled: true,
-            fullname: "/home/shizhilvren/tmux/tmux.c".to_string(),
-            line: 355_u64,
-        }))
-    );
-}
+    #[test]
+    fn f_breakpoint_created_2() {
+        let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-created,bkpt={number=\"1\",type=\"breakpoint\",disp=\"del\",enabled=\"y\",addr=\"0x0000000000404570\",func=\"main\",file=\"tmux.c\",fullname=\"/home/shizhilvren/tmux/tmux.c\",line=\"355\",thread-groups=[\"i1\"],times=\"0\",original-location=\"main\"}\n" );
+        let bkpt = show_bkpt(&a.unwrap());
+        assert!(
+            bkpt == Some(BreakPointAction::Signal(BreakPointSignalAction {
+                number: "1".to_string(),
+                enabled: true,
+                fullname: "/home/shizhilvren/tmux/tmux.c".to_string(),
+                line: 355_u64,
+            }))
+        );
+    }
 
-#[test]
-fn f_breakpoint_modified_2() {
-    let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-modified,bkpt={number=\"2\",type=\"breakpoint\",disp=\"keep\",enabled=\"n\",addr=\"0x0000000000404570\",func=\"main\",file=\"tmux.c\",fullname=\"/home/shizhilvren/tmux/tmux.c\",line=\"355\",thread-groups=[\"i1\"],cond=\"1==2\",times=\"0\",original-location=\"main\"}\n"  );
-    let bkpt = show_bkpt(&a.unwrap());
-    assert!(
-        bkpt == Some(BreakPointAction::Signal(BreakPointSignalAction {
-            number: "2".to_string(),
-            enabled: false,
-            fullname: "/home/shizhilvren/tmux/tmux.c".to_string(),
-            line: 355_u64,
-        }))
-    );
-}
+    #[test]
+    fn f_breakpoint_modified_2() {
+        let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-modified,bkpt={number=\"2\",type=\"breakpoint\",disp=\"keep\",enabled=\"n\",addr=\"0x0000000000404570\",func=\"main\",file=\"tmux.c\",fullname=\"/home/shizhilvren/tmux/tmux.c\",line=\"355\",thread-groups=[\"i1\"],cond=\"1==2\",times=\"0\",original-location=\"main\"}\n"  );
+        let bkpt = show_bkpt(&a.unwrap());
+        assert!(
+            bkpt == Some(BreakPointAction::Signal(BreakPointSignalAction {
+                number: "2".to_string(),
+                enabled: false,
+                fullname: "/home/shizhilvren/tmux/tmux.c".to_string(),
+                line: 355_u64,
+            }))
+        );
+    }
 
-#[test]
-fn f_breakpoint_deleted_2() {
-    let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-deleted,id=\"11\"\n");
-    let bkpt = show_breakpoint_deleted(&a.unwrap());
-    assert!(bkpt == Some(11_u64));
-}
+    #[test]
+    fn f_breakpoint_deleted_2() {
+        let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-deleted,id=\"11\"\n");
+        let bkpt = show_breakpoint_deleted(&a.unwrap());
+        assert!(bkpt == Some(11_u64));
+    }
 
-#[test]
-fn f_breakpoint_modified_3() {
-    let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-modified,bkpt={number=\"5\",type=\"breakpoint\",disp=\"keep\",enabled=\"n\",addr=\"<MULTIPLE>\",times=\"3\",original-location=\"/home/shizhilvren/tmux/environ.c:1\"},\
+    #[test]
+    fn f_breakpoint_modified_3() {
+        let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-modified,bkpt={number=\"5\",type=\"breakpoint\",disp=\"keep\",enabled=\"n\",addr=\"<MULTIPLE>\",times=\"3\",original-location=\"/home/shizhilvren/tmux/environ.c:1\"},\
 {number=\"5.1\",enabled=\"y\",addr=\"0x0000000000426d70\",func=\"environ_RB_INSERT\",file=\"environ.c\",fullname=\"/home/shizhilvren/tmux/environ.c\",line=\"34\",thread-groups=[\"i1\"]},\
 {number=\"5.2\",enabled=\"n\",addr=\"0x0000000000427c61\",func=\"environ_RB_MINMAX\",file=\"environ.c\",fullname=\"/home/shizhilvren/tmux/environ.c\",line=\"34\",thread-groups=[\"i1\"]}\n"  );
-    let bkpt = show_bkpt(&a.unwrap());
-    println!("{:?}", &bkpt);
+        let bkpt = show_bkpt(&a.unwrap());
+        println!("{:?}", &bkpt);
 
-    assert!(
-        bkpt == Some(BreakPointAction::Multiple(BreakPointMultipleAction {
+        assert!(
+            bkpt == Some(BreakPointAction::Multiple(BreakPointMultipleAction {
+                number: "5".to_string(),
+                enabled: false,
+                bps: vec![
+                    BreakPointSignalAction {
+                        number: "5.1".to_string(),
+                        enabled: true,
+                        line: 34_u64,
+                        fullname: "/home/shizhilvren/tmux/environ.c".to_string()
+                    },
+                    BreakPointSignalAction {
+                        number: "5.2".to_string(),
+                        enabled: false,
+                        line: 34_u64,
+                        fullname: "/home/shizhilvren/tmux/environ.c".to_string()
+                    },
+                ]
+            }))
+        );
+    }
+
+    #[test]
+    fn f_breakpoint_modified_4() {
+        let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-modified,\
+    bkpt={number=\"2\",type=\"breakpoint\",disp=\"keep\",enabled=\"n\",addr=\"<MULTIPLE>\",times=\"2\",original-location=\"environ.c:34\",\
+    locations=[\
+    {number=\"2.1\",enabled=\"y\",addr=\"0x0000000000426d70\",func=\"environ_RB_INSERT\",file=\"environ.c\",fullname=\"/home/shizhilvren/tmux/environ.c\",line=\"34\",thread-groups=[\"i1\"]},\
+    {number=\"2.8\",enabled=\"n\",addr=\"0x0000000000427c61\",func=\"environ_RB_MINMAX\",file=\"environ.c\",fullname=\"/home/shizhilvren/tmux/environ.c\",line=\"34\",thread-groups=[\"i1\"]}]}\n"  );
+        println!("{:?}", &a);
+        let bkpt = show_bkpt(&a.unwrap());
+        println!("{:?}", &bkpt);
+        assert!(
+            bkpt == Some(BreakPointAction::Multiple(BreakPointMultipleAction {
+                number: "2".to_string(),
+                enabled: false,
+                bps: vec![
+                    BreakPointSignalAction {
+                        number: "2.1".to_string(),
+                        enabled: true,
+                        line: 34_u64,
+                        fullname: "/home/shizhilvren/tmux/environ.c".to_string()
+                    },
+                    BreakPointSignalAction {
+                        number: "2.8".to_string(),
+                        enabled: false,
+                        line: 34_u64,
+                        fullname: "/home/shizhilvren/tmux/environ.c".to_string()
+                    },
+                ]
+            }))
+        );
+    }
+
+    #[test]
+    fn f_breakpoint() {
+        let a = BreakPointAction::Multiple(BreakPointMultipleAction {
             number: "5".to_string(),
             enabled: false,
             bps: vec![
@@ -375,76 +425,22 @@ fn f_breakpoint_modified_3() {
                     number: "5.1".to_string(),
                     enabled: true,
                     line: 34_u64,
-                    fullname: "/home/shizhilvren/tmux/environ.c".to_string()
+                    fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
                 },
                 BreakPointSignalAction {
-                    number: "5.2".to_string(),
+                    number: "5.1".to_string(),
                     enabled: false,
                     line: 34_u64,
-                    fullname: "/home/shizhilvren/tmux/environ.c".to_string()
+                    fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
                 },
-            ]
-        }))
-    );
-}
-
-#[test]
-fn f_breakpoint_modified_4() {
-    let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-modified,\
-    bkpt={number=\"2\",type=\"breakpoint\",disp=\"keep\",enabled=\"n\",addr=\"<MULTIPLE>\",times=\"2\",original-location=\"environ.c:34\",\
-    locations=[\
-    {number=\"2.1\",enabled=\"y\",addr=\"0x0000000000426d70\",func=\"environ_RB_INSERT\",file=\"environ.c\",fullname=\"/home/shizhilvren/tmux/environ.c\",line=\"34\",thread-groups=[\"i1\"]},\
-    {number=\"2.8\",enabled=\"n\",addr=\"0x0000000000427c61\",func=\"environ_RB_MINMAX\",file=\"environ.c\",fullname=\"/home/shizhilvren/tmux/environ.c\",line=\"34\",thread-groups=[\"i1\"]}]}\n"  );
-    println!("{:?}", &a);
-    let bkpt = show_bkpt(&a.unwrap());
-    println!("{:?}", &bkpt);
-    assert!(
-        bkpt == Some(BreakPointAction::Multiple(BreakPointMultipleAction {
-            number: "2".to_string(),
-            enabled: false,
-            bps: vec![
-                BreakPointSignalAction {
-                    number: "2.1".to_string(),
-                    enabled: true,
-                    line: 34_u64,
-                    fullname: "/home/shizhilvren/tmux/environ.c".to_string()
-                },
-                BreakPointSignalAction {
-                    number: "2.8".to_string(),
-                    enabled: false,
-                    line: 34_u64,
-                    fullname: "/home/shizhilvren/tmux/environ.c".to_string()
-                },
-            ]
-        }))
-    );
-}
-
-#[test]
-fn f_breakpoint() {
-    let a = BreakPointAction::Multiple(BreakPointMultipleAction {
-        number: "5".to_string(),
-        enabled: false,
-        bps: vec![
-            BreakPointSignalAction {
-                number: "5.1".to_string(),
-                enabled: true,
-                line: 34_u64,
-                fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-            },
-            BreakPointSignalAction {
-                number: "5.1".to_string(),
-                enabled: false,
-                line: 34_u64,
-                fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-            },
-        ],
-    });
-    let b = BreakPointAction::Signal(BreakPointSignalAction {
-        number: "5".to_string(),
-        enabled: true,
-        line: 34_u64,
-        fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-    });
-    assert!(a != b);
+            ],
+        });
+        let b = BreakPointAction::Signal(BreakPointSignalAction {
+            number: "5".to_string(),
+            enabled: true,
+            line: 34_u64,
+            fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+        });
+        assert!(a != b);
+    }
 }
