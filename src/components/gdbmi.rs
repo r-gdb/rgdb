@@ -83,8 +83,8 @@ impl Gdbmi {
             };
             let mut actions = vec![];
             out_line.into_iter().for_each(|line| {
-                match miout::TokOutOfBandRecordParser::new().parse(line.as_str()) {
-                    std::result::Result::Ok(a) => {
+                match miout::TokOutputOnelineParser::new().parse(line.as_str()) {
+                    std::result::Result::Ok(OutputOneline::OutOfBandRecord(a)) => {
                         if let Some(show) = show_file(&a) {
                             actions.push(Action::ShowFile(show));
                         } else if let Some(show) = show_asm(&a) {
@@ -97,6 +97,7 @@ impl Gdbmi {
                             actions.push(Action::BreakpointDeleted(id));
                         }
                     }
+                    std::result::Result::Ok(OutputOneline::ResultRecord(a)) => {}
                     std::result::Result::Err(e) => {
                         error!("unknow read gdb mi line {} {:?} ", &e, &line);
                     }
@@ -192,6 +193,14 @@ impl Component for Gdbmi {
             action::Action::Gdbmi(Action::Start) => {
                 let path = self.start_gdb_mi()?;
                 Ok(Some(action::Action::Gdbtty(gdbtty::Action::Start(path))))
+            }
+            action::Action::Gdbmi(Action::ShowAsm((func, _))) => {
+                if let Some(write) = self.gdb_mi_writer.as_mut() {
+                    debug!("start writr something");
+                    write!(write, "-data-disassemble -a {} -- 1\n", func)?;
+                    debug!("end writr something");
+                }
+                Ok(None)
             }
             _ => Ok(None),
         }

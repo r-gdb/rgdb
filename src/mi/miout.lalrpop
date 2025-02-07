@@ -14,6 +14,11 @@ match {
     _
 }
 
+pub TokOutputOneline:OutputOneline = {
+    <a:TokOutOfBandRecord> => OutputOneline::OutOfBandRecord(a),
+    <a:TokResultRecord> => OutputOneline::ResultRecord(a),
+}
+
 pub TokOutOfBandRecord:OutOfBandRecordType = {
     <a:TokAsyncRecord> => OutOfBandRecordType::AsyncRecord(a),
 }
@@ -23,6 +28,13 @@ pub TokAsyncRecord:AsyncRecordType = {
     <a:TokExecAsyncOutput> => AsyncRecordType::ExecAsyncOutput(a),
 }
 
+
+pub TokResultRecord:ResultRecordType = {
+    "^" <t:TokResultClass> <v1: (<TokComma> <TokResult>)* > <c:TokNewLine> =>{
+        let v1 = v1.into_iter().map(|(c, r)| r).collect::<Vec<ResultType>>();
+        ResultRecordType{ result_class:t, results:v1 }
+    }
+}
 
 pub TokExecAsyncOutput:ExecAsyncOutputType = {
     "*" <a:TokAsyncOutput> <c:TokNewLine> => ExecAsyncOutputType{ async_output:a },
@@ -40,6 +52,16 @@ pub TokAsyncOutput:AsyncOutputType = {
         AsyncOutputType{ async_class:e, resaults:v1, values:v2}
     },
 }
+
+
+pub TokResultClass:ResultClassType = {
+    "d" "o" "n" "e" =>ResultClassType::Done,
+    "r" "u" "n" "n" "i" "n" "g" =>ResultClassType::Running,
+    "c" "o" "n" "n" "e" "c" "t" "e" "d" =>ResultClassType::Connected,
+    "e" "r" "r" "o" "r" => ResultClassType::Error,
+    "e" "x" "i" "t" => ResultClassType::Exit,
+}
+
 
 pub TokStopped:AsyncClassType = {
     "s" "t" "o" "p" "p" "e" "d" =>AsyncClassType::Stopped,

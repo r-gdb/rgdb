@@ -14,6 +14,12 @@ pub enum Tok {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub enum OutputOneline {
+    OutOfBandRecord(OutOfBandRecordType),
+    ResultRecord(ResultRecordType),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum OutOfBandRecordType {
     AsyncRecord(AsyncRecordType),
 }
@@ -82,6 +88,21 @@ pub enum List {
     None,
     Results(Vec<ResultType>),
     Values(Vec<ValueType>),
+}
+
+#[derive(Debug, PartialEq, Clone, Eq)]
+pub enum ResultClassType {
+    Done,
+    Running,
+    Connected,
+    Error,
+    Exit,
+}
+
+#[derive(Debug, PartialEq, Clone, Eq)]
+pub struct ResultRecordType {
+    pub result_class: ResultClassType,
+    pub results: Vec<ResultType>,
 }
 
 // pub fn apply_string_escapes(s: &str) -> String {
@@ -625,5 +646,97 @@ mod tests {
         // let mut v = v.iter().map(|(r, c)| r).collect::<Vec<ResultType>>();
         // v.push(e);
         // v
+    }
+
+    #[test]
+    fn f_tok_asm() {
+        use crate::mi::token::Tuple;
+        let a = miout::TokOutputOnelineParser::new().parse("^done,asm_insns=[{address=\"0x00005555555865f0\",func-name=\"main\",offset=\"0\",inst=\"endbr64\"},{address=\"0x00005555555865f4\",func-name=\"main\",offset=\"4\",inst=\"push   %rbp\"},{address=\"0x000055555558834c\",func-name=\"main\",offset=\"7516\",inst=\"mov    %r15,%rcx\"},{address=\"0x000055555558834f\",func-name=\"main\",offset=\"7519\",inst=\"jmp    0x555555587c99 <main+5801>\"}]\n" );
+        println!("{:?}", &a);
+        assert!(
+            a.unwrap()
+                == OutputOneline::ResultRecord(ResultRecordType {
+                    result_class: ResultClassType::Done,
+                    results: vec![ResultType {
+                        variable: "asm_insns".to_string(),
+                        value: ValueType::List(List::Values(vec![
+                            ValueType::Tuple(Tuple::Results(vec![
+                                ResultType {
+                                    variable: "address".to_string(),
+                                    value: ValueType::Const("0x00005555555865f0".to_string()),
+                                },
+                                ResultType {
+                                    variable: "func-name".to_string(),
+                                    value: ValueType::Const("main".to_string()),
+                                },
+                                ResultType {
+                                    variable: "offset".to_string(),
+                                    value: ValueType::Const("0".to_string()),
+                                },
+                                ResultType {
+                                    variable: "inst".to_string(),
+                                    value: ValueType::Const("endbr64".to_string()),
+                                },
+                            ])),
+                            ValueType::Tuple(Tuple::Results(vec![
+                                ResultType {
+                                    variable: "address".to_string(),
+                                    value: ValueType::Const("0x00005555555865f4".to_string()),
+                                },
+                                ResultType {
+                                    variable: "func-name".to_string(),
+                                    value: ValueType::Const("main".to_string()),
+                                },
+                                ResultType {
+                                    variable: "offset".to_string(),
+                                    value: ValueType::Const("4".to_string()),
+                                },
+                                ResultType {
+                                    variable: "inst".to_string(),
+                                    value: ValueType::Const("push   %rbp".to_string()),
+                                },
+                            ])),
+                            ValueType::Tuple(Tuple::Results(vec![
+                                ResultType {
+                                    variable: "address".to_string(),
+                                    value: ValueType::Const("0x000055555558834c".to_string()),
+                                },
+                                ResultType {
+                                    variable: "func-name".to_string(),
+                                    value: ValueType::Const("main".to_string()),
+                                },
+                                ResultType {
+                                    variable: "offset".to_string(),
+                                    value: ValueType::Const("7516".to_string()),
+                                },
+                                ResultType {
+                                    variable: "inst".to_string(),
+                                    value: ValueType::Const("mov    %r15,%rcx".to_string()),
+                                },
+                            ])),
+                            ValueType::Tuple(Tuple::Results(vec![
+                                ResultType {
+                                    variable: "address".to_string(),
+                                    value: ValueType::Const("0x000055555558834f".to_string()),
+                                },
+                                ResultType {
+                                    variable: "func-name".to_string(),
+                                    value: ValueType::Const("main".to_string()),
+                                },
+                                ResultType {
+                                    variable: "offset".to_string(),
+                                    value: ValueType::Const("7519".to_string()),
+                                },
+                                ResultType {
+                                    variable: "inst".to_string(),
+                                    value: ValueType::Const(
+                                        "jmp    0x555555587c99 <main+5801>".to_string()
+                                    ),
+                                },
+                            ])),
+                        ])),
+                    }],
+                })
+        );
     }
 }
