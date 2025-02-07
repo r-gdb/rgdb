@@ -26,6 +26,7 @@ pub trait HashSelf<T: Hash> {
 }
 
 pub trait TextFileData {
+    fn get_file_name(&self) -> String;
     fn add_line(&mut self, line: String);
     fn get_read_done(&self) -> bool;
     fn set_read_done(&mut self);
@@ -44,3 +45,5 @@ pub trait HighlightFileData {
         end: usize,
     ) -> (Vec<Vec<(ratatui::style::Color, String)>>, usize, usize);
 }
+
+pub trait FileData: TextFileData + HighlightFileData + HashSelf<std::string::String> {}

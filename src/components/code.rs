@@ -2,8 +2,7 @@ use super::Component;
 use crate::components::gdbmi;
 use crate::mi::breakpointmi::{BreakPointAction, BreakPointMultipleAction, BreakPointSignalAction};
 use crate::tool;
-use crate::tool::HashSelf;
-use crate::tool::{HighlightFileData, TextFileData};
+use crate::tool::{FileData, HashSelf, HighlightFileData, TextFileData};
 use crate::{action, config::Config};
 use color_eyre::{eyre::Ok, Result};
 use ratatui::{prelude::*, widgets::*};
@@ -26,7 +25,7 @@ pub struct Code {
     command_tx: Option<UnboundedSender<action::Action>>,
     config: Config,
 
-    files_set: HashMap<Rc<String>, SrcFileData>,
+    files_set: HashMap<Rc<String>, Box<dyn FileData>>,
     breakpoint_set: HashMap<Rc<String>, BreakPointData>,
     file_need_show: Option<(String, u64)>,
     vertical_scroll_state: ScrollbarState,
@@ -117,6 +116,9 @@ impl crate::tool::HashSelf<String> for BreakPointData {
 }
 
 impl TextFileData for SrcFileData {
+    fn get_file_name(&self) -> String {
+        self.file_name.as_ref().clone()
+    }
     fn add_line(&mut self, line: String) {
         self.lines.push(line);
     }
@@ -195,6 +197,7 @@ impl crate::tool::HashSelf<String> for SrcFileData {
     }
 }
 
+impl FileData for SrcFileData {}
 impl Code {
     pub fn new() -> Self {
         Self::default()
@@ -326,7 +329,7 @@ impl Code {
             }
         }
     }
-    fn get_need_show_file(&self) -> Option<(&SrcFileData, u64)> {
+    fn get_need_show_file(&self) -> Option<(&Box<dyn FileData>, u64)> {
         match self.file_need_show {
             Some((ref file, line_id)) => match self.files_set.get(&Rc::new(file.clone())) {
                 Some(file_data) => {
@@ -670,7 +673,7 @@ impl Component for Code {
                 match self.files_set.contains_key(&file) {
                     false => {
                         if let Some(send) = self.command_tx.clone() {
-                            let file_data = SrcFileData::new(file.clone());
+                            let file_data = Box::new(SrcFileData::new(file.clone()));
                             self.files_set.insert(file_data.get_key(), file_data);
                             let read_therad = Self::read_file(file.clone(), send.clone());
                             tokio::spawn(async {
@@ -712,12 +715,10 @@ impl Component for Code {
                     Some((name, mut file_data)) => {
                         if let Some(send) = self.command_tx.clone() {
                             file_data.set_read_done();
-                            self.files_set.insert(name, file_data.clone());
-                            let highlight_thread = Self::highlight_file(
-                                file.clone(),
-                                file_data.get_lines().clone(),
-                                send.clone(),
-                            );
+                            let lines = file_data.get_lines().clone();
+                            self.files_set.insert(name, file_data);
+                            let highlight_thread =
+                                Self::highlight_file(file.clone(), lines, send.clone());
                             tokio::spawn(async {
                                 highlight_thread.await;
                             });
@@ -808,7 +809,7 @@ impl Component for Code {
                 end_line,
                 line_id,
                 n,
-                (*file.file_name).clone(),
+                file.get_file_name(),
                 area_ids,
                 area_split,
                 area_src,
