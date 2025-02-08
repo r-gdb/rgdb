@@ -1,21 +1,19 @@
 use super::{gdbtty, Component};
+use crate::mi::breakpointmi::{show_bkpt, show_breakpoint_deleted, BreakPointAction};
+use crate::mi::disassemble::DisassembleFunction;
+use crate::mi::token::*;
+use crate::mi::{disassemble, miout};
 use crate::tool;
 use crate::{action, config::Config};
-// use bytes;
 use color_eyre::{eyre::eyre, eyre::Ok, Result};
-use smol::io::AsyncReadExt;
-
 use portable_pty::{native_pty_system, PtySize};
 use ratatui::prelude::*;
 use serde::{Deserialize, Serialize};
+use smol::io::AsyncReadExt;
 use strum::Display;
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tracing::error;
 use tracing::{debug, info};
-
-use crate::mi::breakpointmi::{show_bkpt, show_breakpoint_deleted, BreakPointAction};
-use crate::mi::miout;
-use crate::mi::token::*;
 
 #[derive(Default)]
 pub struct Gdbmi {
@@ -33,6 +31,7 @@ pub enum Action {
     Out(String),
     ShowFile((String, u64)),
     ShowAsm((String, String)),
+    ReadAsmFunc(DisassembleFunction),
     Breakpoint(BreakPointAction),
     BreakpointDeleted(u64),
 }
@@ -92,7 +91,11 @@ impl Gdbmi {
                             actions.push(Action::BreakpointDeleted(id));
                         }
                     }
-                    std::result::Result::Ok(OutputOneline::ResultRecord(_a)) => {}
+                    std::result::Result::Ok(OutputOneline::ResultRecord(a)) => {
+                        if let Some(asmfunc) = disassemble::get_disassemble_function(a) {
+                            actions.push(Action::ReadAsmFunc(asmfunc));
+                        }
+                    }
                     std::result::Result::Err(e) => {
                         error!("unknow read gdb mi line {} {:?} ", &e, &line);
                     }

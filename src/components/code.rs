@@ -1,12 +1,14 @@
 use super::Component;
 use crate::components::gdbmi;
 use crate::mi::breakpointmi::{BreakPointAction, BreakPointMultipleAction, BreakPointSignalAction};
+use crate::mi::disassemble::DisassembleFunction;
 use crate::tool;
 use crate::tool::{FileData, HashSelf, HighlightFileData, TextFileData};
 use crate::{action, config::Config};
 use color_eyre::{eyre::Ok, Result};
 use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::Path;
@@ -53,6 +55,70 @@ pub struct SrcFileData {
     lines_highlight: Vec<Vec<(ratatui::style::Color, String)>>,
     read_done: bool,
     highlight_done: bool,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct AsmFuncData {
+    pub func_name: Rc<String>,
+    lines: Vec<String>,
+    lines_highlight: Vec<Vec<(ratatui::style::Color, String)>>,
+    read_done: bool,
+    highlight_done: bool,
+}
+
+impl crate::tool::HashSelf<String> for AsmFuncData {
+    fn get_key(&self) -> Rc<String> {
+        self.func_name.clone()
+    }
+}
+
+impl crate::tool::TextFileData for AsmFuncData {
+    fn get_file_name(&self) -> String {
+        self.func_name.as_ref().clone()
+    }
+    fn get_read_done(&self) -> bool {
+        self.read_done
+    }
+    fn set_read_done(&mut self) {
+        self.read_done = true;
+    }
+    fn get_lines_len(&self) -> usize {
+        self.lines.len()
+    }
+    fn get_lines_range(&self, start: usize, end: usize) -> (Vec<&String>, usize, usize) {
+        let n = self.lines.len().saturating_add(1);
+        let end = n.min(end);
+        (
+            self.lines
+                .iter()
+                .skip(start.saturating_sub(1))
+                .take(end.saturating_sub(start))
+                .collect(),
+            start,
+            end,
+        )
+    }
+}
+
+impl AsmFuncData {
+    fn add_lines(&mut self, lines: DisassembleFunction) {
+        let len = lines
+            .insts
+            .iter()
+            .last()
+            .map(|l| l.offset.to_string().len());
+        if let Some(len) = len {
+            lines.insts.iter().for_each(|line| {
+                let space = std::iter::repeat_n(" ", len.saturating_sub(line.offset as usize))
+                    .collect::<String>();
+                let line = format!(
+                    "    {} <+{}>:{} {}\n",
+                    line.offset, line.offset, space, line.inst
+                );
+                self.lines.push(line);
+            })
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,9 +185,7 @@ impl TextFileData for SrcFileData {
     fn get_file_name(&self) -> String {
         self.file_name.as_ref().clone()
     }
-    fn add_line(&mut self, line: String) {
-        self.lines.push(line);
-    }
+
     fn get_read_done(&self) -> bool {
         self.read_done
     }
@@ -147,9 +211,6 @@ impl TextFileData for SrcFileData {
 }
 
 impl HighlightFileData for SrcFileData {
-    fn add_highlight_line(&mut self, line: Vec<(ratatui::style::Color, String)>) {
-        self.lines_highlight.push(line);
-    }
     fn get_highlight_done(&self) -> bool {
         self.highlight_done
     }
@@ -189,7 +250,19 @@ impl SrcFileData {
             highlight_done: false,
         }
     }
+    fn add_line(&mut self, line: String) {
+        self.lines.push(line);
+    }
+    fn add_highlight_line(&mut self, line: Vec<(ratatui::style::Color, String)>) {
+        self.lines_highlight.push(line);
+    }
 }
+
+// impl Any for SrcFileData {
+//     fn type_id(&self) -> TypeId {
+//         TypeId::of::<SrcFileData>()
+//     }
+// }
 
 impl crate::tool::HashSelf<String> for SrcFileData {
     fn get_key(&self) -> Rc<String> {
@@ -197,7 +270,11 @@ impl crate::tool::HashSelf<String> for SrcFileData {
     }
 }
 
-impl FileData for SrcFileData {}
+impl FileData for SrcFileData {
+    // fn as_any(&mut self) -> &mut dyn Any {
+    //     self
+    // }
+}
 impl Code {
     pub fn new() -> Self {
         Self::default()
@@ -702,7 +779,13 @@ impl Component for Code {
             action::Action::Code(Action::FileReadOneLine((file, line))) => {
                 match self.files_set.remove_entry(&file) {
                     Some((name, mut file_data)) => {
-                        file_data.add_line(line);
+                        let ans = file_data.downcast::<SrcFileData>();
+                        let file_data_ref = file_data.as_mut();
+                        let file_data_ref: &mut dyn Any = file_data_ref.as_any();
+                        // debug!("{:?} {:?}", &file_data_ref, &file_data_ref.type_id());
+                        let file_data_ref =
+                            file_data_ref.downcast_mut::<&mut SrcFileData>().unwrap();
+                        file_data_ref.add_line(line);
                         self.files_set.insert(name, file_data);
                     }
                     _ => {
@@ -736,7 +819,11 @@ impl Component for Code {
             action::Action::Code(Action::FilehighlightLine((file, line))) => {
                 match self.files_set.remove_entry(&file) {
                     Some((name, mut file_data)) => {
-                        file_data.add_highlight_line(line);
+                        let file_data_ref = file_data.as_mut();
+                        let file_data_ref: &mut dyn Any = file_data_ref.as_any();
+                        let file_data_ref =
+                            file_data_ref.downcast_mut::<&mut SrcFileData>().unwrap();
+                        file_data_ref.add_highlight_line(line);
                         self.files_set.insert(name, file_data);
                     }
                     _ => {
@@ -755,6 +842,8 @@ impl Component for Code {
                     }
                 }
             }
+            action::Action::Gdbmi(gdbmi::Action::ReadAsmFunc(func)) => {}
+            action::Action::Gdbmi(gdbmi::Action::ShowAsm((func, addr))) => {}
             _ => {}
         }
         Ok(None)

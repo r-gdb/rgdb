@@ -1,9 +1,12 @@
 use color_eyre::{eyre::Ok, Result};
 use libc::ptsname;
 use ratatui::layout::{Constraint, Layout, Rect};
+use std::any::Any;
 use std::ffi::CStr;
 use std::hash::Hash;
 use std::rc::Rc;
+
+use crate::mi::disassemble::DisassembleFunctionLine;
 
 pub fn get_pty_name(fd: i32) -> Result<String> {
     let name = unsafe { ptsname(fd) };
@@ -27,7 +30,6 @@ pub trait HashSelf<T: Hash> {
 
 pub trait TextFileData {
     fn get_file_name(&self) -> String;
-    fn add_line(&mut self, line: String);
     fn get_read_done(&self) -> bool;
     fn set_read_done(&mut self);
     fn get_lines_len(&self) -> usize;
@@ -35,7 +37,6 @@ pub trait TextFileData {
 }
 
 pub trait HighlightFileData {
-    fn add_highlight_line(&mut self, line: Vec<(ratatui::style::Color, String)>);
     fn get_highlight_done(&self) -> bool;
     fn set_highlight_done(&mut self);
     fn get_lines(&self) -> &Vec<String>;
@@ -45,5 +46,6 @@ pub trait HighlightFileData {
         end: usize,
     ) -> (Vec<Vec<(ratatui::style::Color, String)>>, usize, usize);
 }
-
-pub trait FileData: TextFileData + HighlightFileData + HashSelf<std::string::String> {}
+pub trait FileData: Any + TextFileData + HighlightFileData + HashSelf<std::string::String> {
+    // fn as_any(&mut self) ->&mut dyn Any ;
+} 

@@ -11,11 +11,11 @@ pub struct DisassembleFunctionLine {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DisassembleFunction {
-    func: String,
-    insts: Vec<DisassembleFunctionLine>,
+    pub func: String,
+    pub insts: Vec<DisassembleFunctionLine>,
 }
 
-fn get_disassemble_function(r: ResultRecordType) -> Option<DisassembleFunction> {
+pub fn get_disassemble_function(r: ResultRecordType) -> Option<DisassembleFunction> {
     let mut same = true;
     let mut func = None;
     let mut insts = vec![];
