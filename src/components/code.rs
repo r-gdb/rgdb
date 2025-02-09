@@ -30,7 +30,6 @@ pub struct Code {
     asm_func_set: HashMap<Rc<String>, AsmFuncData>,
     breakpoint_set: HashMap<Rc<String>, BreakPointData>,
     file_need_show: FileNeedShow,
-    vertical_scroll_state: ScrollbarState,
     vertical_scroll: usize,
     horizontial_scroll: usize,
     area: Rect,
@@ -596,10 +595,11 @@ impl Code {
     }
     fn get_breakpoint_in_file_range(
         &self,
-        file_name: &String,
+        file: &dyn FileData,
         start_line: usize,
         end_line: usize,
     ) -> HashMap<u64, bool> {
+        let file_name = file.get_file_name();
         let ans = self
             .breakpoint_set
             .iter()
@@ -614,7 +614,7 @@ impl Code {
                     .collect::<Vec<_>>(),
             })
             .filter(|(name, line, _)| {
-                name == file_name && start_line <= *line as usize && *line as usize <= end_line
+                *name == file_name && start_line <= *line as usize && *line as usize <= end_line
             })
             .map(|(_, line, enable)| (line, enable))
             .fold(HashMap::new(), |mut m, (line, enable)| {
@@ -626,13 +626,13 @@ impl Code {
         ans
     }
     fn draw_all(
-        &mut self,
+        &self,
         frame: &mut Frame,
         start_line: usize,
         end_line: usize,
         line_id: usize,
         n: usize,
-        file_name: String,
+        file: &dyn FileData,
         area_ids: Rect,
         area_split: Rect,
         area_src: Rect,
@@ -643,24 +643,24 @@ impl Code {
         } else {
             None
         };
-        self.draw_src(frame, &file_name, start_line, end_line, area_src);
-        self.draw_breakpoint(frame, &file_name, start_line, end_line, area_ids);
+        self.draw_src(frame, file, start_line, end_line, area_src);
+        self.draw_breakpoint(frame, file, start_line, end_line, area_ids);
         self.draw_id(frame, start_line, end_line, line_id, area_ids);
         self.draw_split(frame, area_split);
         self.draw_currect_pointer(
             frame,
-            &file_name,
+            file,
             start_line,
             &line_id_start_0,
             area_src.union(area_split),
         );
-        self.draw_status(frame, file_name, area_status);
+        self.draw_status(frame, file, area_status);
         self.draw_scroll(frame, area_src, n);
     }
     fn draw_currect_pointer(
-        &mut self,
+        &self,
         frame: &mut Frame,
-        file_name: &String,
+        file: &dyn FileData,
         start_line: usize,
         line_id_start_0: &Option<usize>,
         area_currect_pointer: Rect,
@@ -673,19 +673,16 @@ impl Code {
             ])
             .areas(area_currect_pointer);
             let point_line = start_line.saturating_add(*line_id_start_0);
-            let pointer_size = self
-                .files_set
-                .get(&Rc::new(file_name.clone()))
-                .and_then(|file| match file.get_read_done() {
-                    true => file
-                        .get_lines_range(point_line, point_line + 1)
-                        .0
-                        .iter()
-                        .nth(0)
-                        .and_then(|s| (**s).chars().enumerate().find(|(_, c)| *c != ' '))
-                        .map(|(id, _)| id.saturating_sub(self.horizontial_scroll)),
-                    _ => None,
-                });
+            let pointer_size = match file.get_read_done() {
+                true => file
+                    .get_lines_range(point_line, point_line + 1)
+                    .0
+                    .iter()
+                    .nth(0)
+                    .and_then(|s| (**s).chars().enumerate().find(|(_, c)| *c != ' '))
+                    .map(|(id, _)| id.saturating_sub(self.horizontial_scroll)),
+                _ => None,
+            };
 
             if let Some(n) = pointer_size {
                 let text_pointer = Line::from_iter(
@@ -707,26 +704,22 @@ impl Code {
         }
     }
     fn draw_src(
-        &mut self,
+        &self,
         frame: &mut Frame,
-        file_name: &String,
+        file: &dyn FileData,
         start_line: usize,
         end_line: usize,
         area_src: Rect,
     ) {
-        // let empty_vec: (Vec<Vec<(_, _)>>, Vec<_>) = (vec![], vec![]);
-        let src = match self.files_set.get(&Rc::new(file_name.clone())) {
-            Some(file) => match (file.get_read_done(), file.get_highlight_done()) {
-                (true, true) => file.get_highlight_lines_range(start_line, end_line).0,
-                (false, true) => file
-                    .get_lines_range(start_line, end_line)
-                    .0
-                    .iter()
-                    .map(|s| vec![(ratatui::style::Color::White, s.to_string())])
-                    .collect(),
-                _ => vec![],
-            },
-            None => vec![],
+        let src = match (file.get_read_done(), file.get_highlight_done()) {
+            (true, true) => file.get_highlight_lines_range(start_line, end_line).0,
+            (false, true) => file
+                .get_lines_range(start_line, end_line)
+                .0
+                .iter()
+                .map(|s| vec![(ratatui::style::Color::White, s.to_string())])
+                .collect(),
+            _ => vec![],
         };
         let text_src = Text::from_iter(
             src.iter()
@@ -735,8 +728,8 @@ impl Code {
         let paragraph_src = Paragraph::new(text_src).scroll((0, self.horizontial_scroll as u16));
         frame.render_widget(paragraph_src, area_src);
     }
-    fn draw_status(&mut self, frame: &mut Frame, file_name: String, area_status: Rect) {
-        let title = file_name;
+    fn draw_status(&self, frame: &mut Frame, file: &dyn FileData, area_status: Rect) {
+        let title = file.get_file_name();
         let scroll_x = title.len().saturating_sub(self.area.width as usize) as u16;
         let paragraph_status = Paragraph::new(title)
             .fg(Color::Black)
@@ -745,7 +738,7 @@ impl Code {
         frame.render_widget(paragraph_status, area_status);
     }
     fn draw_id(
-        &mut self,
+        &self,
         frame: &mut Frame,
         start_line: usize,
         end_line: usize,
@@ -767,14 +760,14 @@ impl Code {
         frame.render_widget(paragraph_id, area_ids);
     }
     fn draw_breakpoint(
-        &mut self,
+        &self,
         frame: &mut Frame,
-        file_name: &String,
+        file: &dyn FileData,
         start_line: usize,
         end_line: usize,
         area_ids: Rect,
     ) {
-        let bp = self.get_breakpoint_in_file_range(file_name, start_line, end_line);
+        let bp = self.get_breakpoint_in_file_range(file, start_line, end_line);
         let ids: Vec<usize> = (start_line..end_line.saturating_add(1)).collect::<Vec<_>>();
         let text_ids = Text::from_iter(ids.iter().map(|s| {
             if let Some(enable) = bp.get(&(*s as u64)) {
@@ -792,7 +785,7 @@ impl Code {
         frame.render_widget(paragraph_id, area_ids);
     }
 
-    fn draw_split(&mut self, frame: &mut Frame, area_split: Rect) {
+    fn draw_split(&self, frame: &mut Frame, area_split: Rect) {
         let test_split = Text::from_iter(std::iter::repeat_n(
             Line::from("│ "),
             area_split.height as usize,
@@ -800,16 +793,29 @@ impl Code {
         let paragraph_split = Paragraph::new(test_split);
         frame.render_widget(paragraph_split, area_split);
     }
-    fn draw_scroll(&mut self, frame: &mut Frame, area_src: Rect, text_len: usize) {
+    fn draw_scroll(&self, frame: &mut Frame, area_src: Rect, text_len: usize) {
         let hight = area_src.height as usize;
         let up_half = hight.div_euclid(2);
         let scrollbar =
             Scrollbar::new(ScrollbarOrientation::VerticalRight).symbols(scrollbar::VERTICAL);
-        self.vertical_scroll_state = self
-            .vertical_scroll_state
-            .content_length(text_len.saturating_sub(hight))
+
+        let mut state = ScrollbarState::new(text_len.saturating_sub(hight))
             .position(self.vertical_scroll.saturating_sub(up_half));
-        frame.render_stateful_widget(scrollbar, area_src, &mut self.vertical_scroll_state);
+        frame.render_stateful_widget(scrollbar, area_src, &mut state);
+    }
+    fn set_vertical_to_stop_point(&mut self, file_name: &String) {
+        match self.get_need_show_file() {
+            Some((file, line_id)) => {
+                if *file_name == file.get_file_name() {
+                    self.vertical_scroll = line_id as usize;
+                } else {
+                    error!("file not same '{}' '{}'", file_name, file.get_file_name());
+                }
+            }
+            _ => {
+                error!("ReadAsmFunc set line fail");
+            }
+        };
     }
 }
 
@@ -876,7 +882,6 @@ impl Component for Code {
                     name: file.clone(),
                     line: line_id,
                 });
-                self.vertical_scroll = line_id as usize;
                 match self.files_set.contains_key(&file) {
                     false => {
                         if let Some(send) = self.command_tx.clone() {
@@ -896,6 +901,8 @@ impl Component for Code {
                         debug!("file {} has read", &file);
                     }
                 }
+                self.set_vertical_to_stop_point(&file);
+
             }
             action::Action::Gdbmi(gdbmi::Action::Breakpoint(bkpt)) => {
                 let val = BreakPointData::from(&bkpt);
@@ -933,6 +940,8 @@ impl Component for Code {
                         error!("file {} not found", &file);
                     }
                 }
+                self.set_vertical_to_stop_point(&file);
+
             }
             action::Action::Code(Action::FilehighlightLine((file_name, line))) => {
                 self.files_set.entry(file_name.into()).and_modify(|file| {
@@ -958,32 +967,19 @@ impl Component for Code {
                         asm.set_read_done();
                         asm.add_highlight_lines(&func);
                         asm.set_highlight_done();
-
                         ret = Some(action::Action::Code(Action::AsmFileEnd));
                     });
-                match self.get_need_show_file() {
-                    Some((file, line_id)) => {
-                        if file.get_file_name() == func.func {
-                            self.vertical_scroll = line_id as usize;
-                        } else {
-                            error!("ReadAsmFunc file mismatch");
-                        }
-                    }
-                    _ => {
-                        error!("ReadAsmFunc set line fail");
-                    }
-                };
+                self.set_vertical_to_stop_point(&func.func);
             }
             action::Action::Gdbmi(gdbmi::Action::ShowAsm((func, addr))) => {
                 self.file_need_show = FileNeedShow::AsmFile(FileNeedShowAsmFunc {
                     name: func.clone(),
                     addr,
                 });
-                match self.files_set.contains_key(&func) {
+                match self.asm_func_set.contains_key(&func) {
                     false => {
                         let file_data = AsmFuncData::new(func.clone());
                         self.asm_func_set.insert(file_data.get_key(), file_data);
-
                         debug!("asm file {} start", &func);
                         ret = Some(action::Action::Gdbmi(gdbmi::Action::DisassembleAsm(
                             func.clone(),
@@ -993,6 +989,7 @@ impl Component for Code {
                         debug!("asm {} has read", &func);
                     }
                 }
+                self.set_vertical_to_stop_point(&func);
             }
             _ => {}
         }
@@ -1048,7 +1045,7 @@ impl Component for Code {
                 end_line,
                 line_id,
                 n,
-                file.get_file_name(),
+                file,
                 area_ids,
                 area_split,
                 area_src,
@@ -1063,7 +1060,7 @@ impl Component for Code {
             end_line,
             line_id,
             n,
-            file_name,
+            file,
             area_ids,
             area_split,
             area_src,
@@ -1076,7 +1073,7 @@ impl Component for Code {
                 end_line,
                 line_id as usize,
                 n,
-                file_name,
+                file,
                 area_ids,
                 area_split,
                 area_src,
@@ -1249,7 +1246,7 @@ mod tests {
         let mut code = Code::new();
         code.breakpoint_set.insert(a.get_key(), a);
         let ans = code.get_breakpoint_in_file_range(
-            &"/home/shizhilvren/tmux/environ.c".to_string(),
+            &SrcFileData::new("/home/shizhilvren/tmux/environ.c".to_string()),
             22,
             39,
         );
@@ -1282,7 +1279,7 @@ mod tests {
         let mut code = Code::new();
         code.breakpoint_set.insert(a.get_key(), a);
         let ans = code.get_breakpoint_in_file_range(
-            &"/home/shizhilvren/tmux/environ.c".to_string(),
+            &SrcFileData::new("/home/shizhilvren/tmux/environ.c".to_string()),
             22,
             39,
         );
@@ -1309,7 +1306,7 @@ mod tests {
         code.breakpoint_set.insert(a.get_key(), a);
         code.breakpoint_set.insert(b.get_key(), b);
         let ans = code.get_breakpoint_in_file_range(
-            &"/home/shizhilvren/tmux/environ.c".to_string(),
+            &SrcFileData::new("/home/shizhilvren/tmux/environ.c".to_string()),
             22,
             36,
         );
