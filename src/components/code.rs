@@ -27,19 +27,36 @@ pub struct Code {
     config: Config,
 
     files_set: HashMap<Rc<String>, SrcFileData>,
-    // asm_files_set: HashMap<Rc<String>, >,
+    asm_func_set: HashMap<Rc<String>, AsmFuncData>,
     breakpoint_set: HashMap<Rc<String>, BreakPointData>,
-    file_need_show: Option<(String, u64)>,
+    file_need_show: FileNeedShow,
     vertical_scroll_state: ScrollbarState,
     vertical_scroll: usize,
     horizontial_scroll: usize,
     area: Rect,
 }
 
+#[derive(Default)]
+pub enum FileNeedShow {
+    #[default]
+    None,
+    SrcFile(FileNeedShowSrcFile),
+    AsmFile(FileNeedShowAsmFunc),
+}
+pub struct FileNeedShowSrcFile {
+    pub name: String,
+    pub line: u64,
+}
+pub struct FileNeedShowAsmFunc {
+    pub name: String,
+    pub addr: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
 pub enum Action {
     FileReadOneLine((String, String)),
     FileReadEnd(String),
+    AsmFileEnd,
     FilehighlightLine((String, Vec<(ratatui::style::Color, String)>)),
     FilehighlightEnd(String),
     Up(usize),
@@ -60,6 +77,7 @@ pub struct SrcFileData {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AsmFuncData {
     pub func_name: Rc<String>,
+    addrs: Vec<(u64, u64)>,
     lines: Vec<String>,
     lines_highlight: Vec<Vec<(ratatui::style::Color, String)>>,
     read_done: bool,
@@ -98,10 +116,49 @@ impl crate::tool::TextFileData for AsmFuncData {
             end,
         )
     }
+    fn get_lines(&self) -> &Vec<String> {
+        self.lines.as_ref()
+    }
 }
 
+impl crate::tool::HighlightFileData for AsmFuncData {
+    fn get_highlight_done(&self) -> bool {
+        self.highlight_done
+    }
+    fn set_highlight_done(&mut self) {
+        self.highlight_done = true;
+    }
+    fn get_highlight_lines_range(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> (Vec<Vec<(ratatui::style::Color, String)>>, usize, usize) {
+        let n = self.lines_highlight.len().saturating_add(1);
+        let end = n.min(end);
+        (
+            self.lines_highlight
+                .iter()
+                .skip(start.saturating_sub(1))
+                .take(end.saturating_sub(start))
+                .cloned()
+                .collect::<Vec<Vec<_>>>(),
+            start,
+            end,
+        )
+    }
+}
 impl AsmFuncData {
-    fn add_lines(&mut self, lines: DisassembleFunction) {
+    pub fn new(func_name: String) -> Self {
+        Self {
+            func_name: Rc::new(func_name),
+            lines: vec![],
+            lines_highlight: vec![],
+            addrs: vec![],
+            read_done: false,
+            highlight_done: false,
+        }
+    }
+    fn add_lines(&mut self, lines: &DisassembleFunction) {
         let len = lines
             .insts
             .iter()
@@ -113,11 +170,65 @@ impl AsmFuncData {
                     .collect::<String>();
                 let line = format!(
                     "    {} <+{}>:{} {}\n",
-                    line.offset, line.offset, space, line.inst
+                    line.address, line.offset, space, line.inst
                 );
                 self.lines.push(line);
-            })
+            });
+            self.create_addr_map(lines);
         }
+    }
+    fn add_highlight_lines(&mut self, func: &DisassembleFunction) {
+        let lines = self.get_lines();
+        self.lines_highlight = lines
+            .iter()
+            .map(|line| vec![(Color::White, line.clone())])
+            .collect();
+    }
+    pub fn get_line_id(&self, addr: &String) -> Option<u64> {
+        match (addr.starts_with("0x"), addr.get(2..addr.len())) {
+            (true, Some(addr_id_str)) => {
+                u64::from_str_radix(addr_id_str, 16).map_or(None, |addr_id| {
+                    match self
+                        .addrs
+                        .as_slice()
+                        .binary_search_by_key(&addr_id, |&(a, _)| a)
+                    {
+                        std::result::Result::Ok(id) => self.addrs.get(id).map(|(_, b)| b).cloned(),
+                        _ => {
+                            error!(
+                                "asm addr {}  not find in asm func {:?},",
+                                &addr, &self.addrs
+                            );
+                            None
+                        }
+                    }
+                })
+            }
+            _ => None,
+        }
+    }
+    fn create_addr_map(&mut self, func: &DisassembleFunction) {
+        self.addrs = func
+            .insts
+            .iter()
+            .enumerate()
+            .filter_map(|(id, line)| {
+                match (
+                    line.address.starts_with("0x"),
+                    line.address.get(2..line.address.len()),
+                ) {
+                    (true, Some(addr)) => {
+                        let id = id.saturating_add(1);
+                        u64::from_str_radix(addr, 16).map_or(None, |addr| Some((addr, id as u64)))
+                    }
+                    _ => {
+                        error!("asm addr {} not an hex address", &line.address);
+                        None
+                    }
+                }
+            })
+            .collect();
+        self.addrs.sort();
     }
 }
 
@@ -185,7 +296,6 @@ impl TextFileData for SrcFileData {
     fn get_file_name(&self) -> String {
         self.file_name.as_ref().clone()
     }
-
     fn get_read_done(&self) -> bool {
         self.read_done
     }
@@ -208,6 +318,9 @@ impl TextFileData for SrcFileData {
             end,
         )
     }
+    fn get_lines(&self) -> &Vec<String> {
+        self.lines.as_ref()
+    }
 }
 
 impl HighlightFileData for SrcFileData {
@@ -216,9 +329,6 @@ impl HighlightFileData for SrcFileData {
     }
     fn set_highlight_done(&mut self) {
         self.highlight_done = true;
-    }
-    fn get_lines(&self) -> &Vec<String> {
-        self.lines.as_ref()
     }
     fn get_highlight_lines_range(
         &self,
@@ -258,23 +368,14 @@ impl SrcFileData {
     }
 }
 
-// impl Any for SrcFileData {
-//     fn type_id(&self) -> TypeId {
-//         TypeId::of::<SrcFileData>()
-//     }
-// }
-
 impl crate::tool::HashSelf<String> for SrcFileData {
     fn get_key(&self) -> Rc<String> {
         self.file_name.clone()
     }
 }
 
-impl FileData for SrcFileData {
-    // fn as_any(&mut self) -> &mut dyn Any {
-    //     self
-    // }
-}
+impl FileData for SrcFileData {}
+impl FileData for AsmFuncData {}
 impl Code {
     pub fn new() -> Self {
         Self::default()
@@ -406,23 +507,48 @@ impl Code {
             }
         }
     }
-    fn get_need_show_file(&self) -> Option<(&SrcFileData, u64)> {
-        match self.file_need_show {
-            Some((ref file, line_id)) => match self.files_set.get(&Rc::new(file.clone())) {
+    fn get_need_show_file(&self) -> Option<(&dyn FileData, u64)> {
+        match &self.file_need_show {
+            FileNeedShow::None => None,
+            FileNeedShow::SrcFile(file) => match self.files_set.get(&Rc::new(file.name.clone())) {
                 Some(file_data) => {
                     if file_data.get_read_done() {
-                        Some((file_data, line_id))
+                        Some((file_data as &dyn FileData, file.line))
                     } else {
-                        info!("file {} not read done", &file);
+                        info!("file {} not read done", &file.name);
                         None
                     }
                 }
                 _ => {
-                    error!("file {} not found", &file);
+                    error!("file {} not found", &file.name);
                     None
                 }
             },
-            _ => None,
+            FileNeedShow::AsmFile(func) => {
+                let name = &func.name;
+                match self.asm_func_set.get(&Rc::new(name.clone())) {
+                    Some(asm_file) => match asm_file.get_read_done() {
+                        true => match asm_file.get_line_id(&func.addr) {
+                            Some(id) => Some((asm_file, id)),
+                            _ => {
+                                error!(
+                                    "asm file {} not find {:?}, in {:?}",
+                                    name, &func.addr, &asm_file
+                                );
+                                None
+                            }
+                        },
+                        _ => {
+                            info!("asm file {} not read done", name);
+                            None
+                        }
+                    },
+                    _ => {
+                        error!("asm {} not found", &name);
+                        None
+                    }
+                }
+            }
         }
     }
     fn set_area(&mut self, area: &layout::Size) {
@@ -722,6 +848,7 @@ impl Component for Code {
         }
     }
     fn update(&mut self, action: action::Action) -> Result<Option<action::Action>> {
+        let mut ret = None;
         match action {
             action::Action::Tick => {
                 // add any logic here that should run on every tick
@@ -745,7 +872,10 @@ impl Component for Code {
                 self.file_right(p);
             }
             action::Action::Gdbmi(gdbmi::Action::ShowFile((file, line_id))) => {
-                self.file_need_show = Some((file.clone(), line_id));
+                self.file_need_show = FileNeedShow::SrcFile(FileNeedShowSrcFile {
+                    name: file.clone(),
+                    line: line_id,
+                });
                 self.vertical_scroll = line_id as usize;
                 match self.files_set.contains_key(&file) {
                     false => {
@@ -820,11 +950,53 @@ impl Component for Code {
                     }
                 }
             }
-            action::Action::Gdbmi(gdbmi::Action::ReadAsmFunc(func)) => {}
-            action::Action::Gdbmi(gdbmi::Action::ShowAsm((func, addr))) => {}
+            action::Action::Gdbmi(gdbmi::Action::ReadAsmFunc(func)) => {
+                self.asm_func_set
+                    .entry(func.func.clone().into())
+                    .and_modify(|asm| {
+                        asm.add_lines(&func);
+                        asm.set_read_done();
+                        asm.add_highlight_lines(&func);
+                        asm.set_highlight_done();
+
+                        ret = Some(action::Action::Code(Action::AsmFileEnd));
+                    });
+                match self.get_need_show_file() {
+                    Some((file, line_id)) => {
+                        if file.get_file_name() == func.func {
+                            self.vertical_scroll = line_id as usize;
+                        } else {
+                            error!("ReadAsmFunc file mismatch");
+                        }
+                    }
+                    _ => {
+                        error!("ReadAsmFunc set line fail");
+                    }
+                };
+            }
+            action::Action::Gdbmi(gdbmi::Action::ShowAsm((func, addr))) => {
+                self.file_need_show = FileNeedShow::AsmFile(FileNeedShowAsmFunc {
+                    name: func.clone(),
+                    addr,
+                });
+                match self.files_set.contains_key(&func) {
+                    false => {
+                        let file_data = AsmFuncData::new(func.clone());
+                        self.asm_func_set.insert(file_data.get_key(), file_data);
+
+                        debug!("asm file {} start", &func);
+                        ret = Some(action::Action::Gdbmi(gdbmi::Action::DisassembleAsm(
+                            func.clone(),
+                        )));
+                    }
+                    true => {
+                        debug!("asm {} has read", &func);
+                    }
+                }
+            }
             _ => {}
         }
-        Ok(None)
+        Ok(ret)
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
@@ -924,6 +1096,8 @@ mod tests {
     use crate::tool::HashSelf;
     use crate::tool::TextFileData;
     use std::collections::HashMap;
+
+    use super::AsmFuncData;
     #[test]
     fn test_crtl_ascii_00_0f() {
         let line = "\u{0}\u{1}\u{2}\u{3}\u{4}\u{5}\u{6}\u{7}\u{8}\u{b}\u{c}\r\u{e}\u{f}";
@@ -1140,5 +1314,20 @@ mod tests {
             36,
         );
         assert!(ans == HashMap::from([(34_u64, true)]));
+    }
+
+    #[test]
+    fn f_get_line_id() {
+        let asm = AsmFuncData {
+            func_name: std::rc::Rc::new("main".to_string()),
+            addrs: vec![(0x01a as u64, 2), (0x02b as u64, 3), (0x12b as u64, 5)],
+            lines: vec![],
+            lines_highlight: vec![],
+            read_done: true,
+            highlight_done: true,
+        };
+        let id = asm.get_line_id(&"0x000001a".to_string());
+        println!("{:?}", &id);
+        assert!(id == Some(2));
     }
 }

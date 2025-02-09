@@ -82,7 +82,8 @@ impl Component for StartPage {
     fn update(&mut self, action: action::Action) -> Result<Option<action::Action>> {
         if self.is_start() {
             match action {
-                action::Action::Code(code::Action::FileReadEnd(_)) => {
+                action::Action::Code(code::Action::FileReadEnd(_))
+                | action::Action::Code(code::Action::AsmFileEnd) => {
                     self.set_is_start(false);
                 }
                 _ => {}

@@ -31,6 +31,7 @@ pub enum Action {
     Out(String),
     ShowFile((String, u64)),
     ShowAsm((String, String)),
+    DisassembleAsm(String),
     ReadAsmFunc(DisassembleFunction),
     Breakpoint(BreakPointAction),
     BreakpointDeleted(u64),
@@ -192,7 +193,7 @@ impl Component for Gdbmi {
                 let path = self.start_gdb_mi()?;
                 Ok(Some(action::Action::Gdbtty(gdbtty::Action::Start(path))))
             }
-            action::Action::Gdbmi(Action::ShowAsm((func, _))) => {
+            action::Action::Gdbmi(Action::DisassembleAsm(func)) => {
                 if let Some(write) = self.gdb_mi_writer.as_mut() {
                     write!(write, "-data-disassemble -a {} -- 1\n", func)?;
                 }

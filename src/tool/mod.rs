@@ -31,12 +31,12 @@ pub trait TextFileData {
     fn set_read_done(&mut self);
     fn get_lines_len(&self) -> usize;
     fn get_lines_range(&self, start: usize, end: usize) -> (Vec<&String>, usize, usize);
+    fn get_lines(&self) -> &Vec<String>;
 }
 
 pub trait HighlightFileData {
     fn get_highlight_done(&self) -> bool;
     fn set_highlight_done(&mut self);
-    fn get_lines(&self) -> &Vec<String>;
     fn get_highlight_lines_range(
         &self,
         start: usize,

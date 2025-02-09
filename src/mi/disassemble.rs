@@ -21,13 +21,10 @@ pub fn get_disassemble_function(r: ResultRecordType) -> Option<DisassembleFuncti
     let mut insts = vec![];
     if r.result_class == ResultClassType::Done {
         r.results.into_iter().next().map(|v| {
-            println!("some ResultClassType::Done {:?}", &v);
             if v.variable == "asm_insns" {
                 if let ValueType::List(List::Values(l)) = v.value {
                     l.into_iter().for_each(|v| {
-                        println!("some v {:?}", &v);
                         if let Some((f, dfl)) = get_disassemble_function_line(v) {
-                            println!("some ans {:?} {:?}", &f, &dfl);
                             insts.push(dfl);
                             match &func {
                                 Some(func) => {
@@ -43,7 +40,6 @@ pub fn get_disassemble_function(r: ResultRecordType) -> Option<DisassembleFuncti
             }
         });
     }
-    println!("{:?} {:?} {:?}", &func, &same, &insts);
 
     match (func, same) {
         (Some(func), true) => Some(DisassembleFunction { func, insts }),
