@@ -10,15 +10,10 @@ use color_eyre::{eyre::Ok, Result};
 use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::ffi::OsStr;
-use std::path::Path;
 use std::rc::Rc;
 use strum::Display;
 use symbols::scrollbar;
-use syntect::easy::HighlightLines;
-use syntect::parsing::SyntaxSet;
-use tokio::fs::File;
-use tokio::io::AsyncBufReadExt;
+
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
@@ -74,133 +69,7 @@ impl Code {
     pub fn new() -> Self {
         Self::default()
     }
-    async fn highlight_file(
-        file_name: String,
-        lines: Vec<String>,
-        send: UnboundedSender<action::Action>,
-    ) {
-        let ps = SyntaxSet::load_defaults_newlines();
-        let ts = syntect::highlighting::ThemeSet::load_defaults();
-        let ext = Path::new(&file_name).extension().and_then(OsStr::to_str);
-        if let Some(ext) = ext {
-            if let Some(syntax) = ps.find_syntax_by_extension(ext) {
-                let mut h = HighlightLines::new(syntax, &ts.themes["base16-mocha.dark"]);
-                lines.iter().for_each(|s| match h.highlight_line(s, &ps) {
-                    std::result::Result::Ok(ranges) => {
-                        let e = ranges
-                            .into_iter()
-                            .map(|(c, s)| {
-                                (
-                                    ratatui::style::Color::Rgb(
-                                        c.foreground.r,
-                                        c.foreground.g,
-                                        c.foreground.b,
-                                    ),
-                                    s.to_string(),
-                                )
-                            })
-                            .collect();
-                        match send.send(action::Action::Code(Action::FilehighlightLine((
-                            file_name.clone(),
-                            e,
-                        )))) {
-                            std::result::Result::Ok(_) => {}
-                            std::result::Result::Err(e) => {
-                                error!("send error: {:?}", e);
-                            }
-                        }
-                        // debug!("highlight {:?}", ranges);
-                    }
-                    std::result::Result::Err(e) => {
-                        error!("file {} highlight fail {} {}", &file_name, &s, e);
-                    }
-                });
-                match send.send(action::Action::Code(Action::FilehighlightEnd(file_name))) {
-                    std::result::Result::Ok(_) => {}
-                    std::result::Result::Err(e) => {
-                        error!("send error: {:?}", e);
-                    }
-                }
-            } else {
-                error!("file {} not have extension", &ext);
-            }
-        } else {
-            error!("file {} not have extension", &file_name);
-        }
-    }
-    fn read_file_filter(line: String) -> String {
-        line.replace("\u{0}", r##"\{NUL}"##)
-            .replace("\u{1}", r##"\{SOH}"##)
-            .replace("\u{2}", r##"\{STX}"##)
-            .replace("\u{3}", r##"\{ETX}"##)
-            .replace("\u{4}", r##"\{EOT}"##)
-            .replace("\u{5}", r##"\{ENQ}"##)
-            .replace("\u{6}", r##"\{ACK}"##)
-            .replace("\u{7}", r##"\{BEL}"##)
-            .replace("\u{8}", r##"\{BS}"##)
-            .replace("\t", "    ") // \u{9}
-            .replace("\u{b}", r##"\{VT}"##)
-            .replace("\u{c}", r##"\{FF}"##)
-            .replace("\r", "") //\u{d}
-            .replace("\u{e}", r##"\{SO}"##)
-            .replace("\u{f}", r##"\{SI}"##)
-            .replace("\u{10}", r##"\{DLE}"##)
-            .replace("\u{11}", r##"\{DC1}"##)
-            .replace("\u{12}", r##"\{DC2}"##)
-            .replace("\u{13}", r##"\{DC3}"##)
-            .replace("\u{14}", r##"\{DC4}"##)
-            .replace("\u{15}", r##"\{NAK}"##)
-            .replace("\u{16}", r##"\{SYN}"##)
-            .replace("\u{17}", r##"\{ETB}"##)
-            .replace("\u{18}", r##"\{CAN}"##)
-            .replace("\u{19}", r##"\{EM}"##)
-            .replace("\u{1a}", r##"\{SUB}"##)
-            .replace("\u{1b}", r##"\{ESC}"##)
-            .replace("\u{1c}", r##"\{FS}"##)
-            .replace("\u{1d}", r##"\{GS}"##)
-            .replace("\u{1e}", r##"\{RS}"##)
-            .replace("\u{1f}", r##"\{US}"##)
-            .replace("\u{7f}", r##"\{DEL}"##)
-    }
-    async fn read_file(file: String, send: UnboundedSender<action::Action>) {
-        match File::open(&file).await {
-            std::result::Result::Ok(f) => {
-                let mut f = tokio::io::BufReader::new(f);
-                loop {
-                    let mut line = String::new();
-                    match f.read_line(&mut line).await {
-                        std::result::Result::Ok(0) => {
-                            match send.send(action::Action::Code(Action::FileReadEnd(file))) {
-                                std::result::Result::Ok(_) => {}
-                                std::result::Result::Err(e) => {
-                                    error!("send error: {:?}", e);
-                                }
-                            }
-                            break;
-                        }
-                        std::result::Result::Ok(_n) => {
-                            line = Self::read_file_filter(line);
-                            match send.send(action::Action::Code(Action::FileReadOneLine((
-                                file.clone(),
-                                line,
-                            )))) {
-                                std::result::Result::Ok(_) => {}
-                                std::result::Result::Err(e) => {
-                                    error!("send error: {:?}", e);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            error!("file {} parse error: {:?}", &file, e);
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                error!("open file {} error: {:?}", &file, e);
-            }
-        }
-    }
+
     fn get_need_show_file(&self) -> Option<(&dyn FileData, u64)> {
         match &self.file_need_show {
             FileNeedShow::None => None,
@@ -582,7 +451,7 @@ impl Component for Code {
                         if let Some(send) = self.command_tx.clone() {
                             let file_data = SrcFileData::new(file.clone());
                             self.files_set.insert(file_data.get_key(), file_data);
-                            let read_therad = Self::read_file(file.clone(), send.clone());
+                            let read_therad = SrcFileData::read_file(file.clone(), send.clone());
                             tokio::spawn(async {
                                 read_therad.await;
                             });
@@ -620,7 +489,7 @@ impl Component for Code {
                             let lines = file_data.get_lines().clone();
                             self.files_set.insert(name, file_data);
                             let highlight_thread =
-                                Self::highlight_file(file.clone(), lines, send.clone());
+                                SrcFileData::highlight_file(file.clone(), lines, send.clone());
                             tokio::spawn(async {
                                 highlight_thread.await;
                             });

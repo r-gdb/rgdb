@@ -11,7 +11,7 @@ mod tests {
     #[test]
     fn test_crtl_ascii_00_0f() {
         let line = "\u{0}\u{1}\u{2}\u{3}\u{4}\u{5}\u{6}\u{7}\u{8}\u{b}\u{c}\r\u{e}\u{f}";
-        let line = Code::read_file_filter(line.to_string());
+        let line = SrcFileData::read_file_filter(line.to_string());
         println!("{:?}", line);
         assert!(
             line == r##"\{NUL}\{SOH}\{STX}\{ETX}\{EOT}\{ENQ}\{ACK}\{BEL}\{BS}\{VT}\{FF}\{SO}\{SI}"##
@@ -21,7 +21,7 @@ mod tests {
 
     fn test_crtl_ascii_10_1f() {
         let line = "\u{10}\u{11}\u{12}\u{13}\u{14}\u{15}\u{16}\u{17}\u{18}\u{19}\u{1a}\u{1b}\u{1c}\u{1d}\u{1e}\u{1f}\u{7f}";
-        let line = Code::read_file_filter(line.to_string());
+        let line = SrcFileData::read_file_filter(line.to_string());
         assert!(
             line == r##"\{DLE}\{DC1}\{DC2}\{DC3}\{DC4}\{NAK}\{SYN}\{ETB}\{CAN}\{EM}\{SUB}\{ESC}\{FS}\{GS}\{RS}\{US}\{DEL}"##
         );
@@ -29,13 +29,13 @@ mod tests {
     #[test]
     fn test_crtl_ascii_7f() {
         let line = "\u{7f}";
-        let line = Code::read_file_filter(line.to_string());
+        let line = SrcFileData::read_file_filter(line.to_string());
         assert!(line == r##"\{DEL}"##);
     }
     #[test]
     fn test_crtl_ascii_tab() {
         let line = "\t";
-        let line = Code::read_file_filter(line.to_string());
+        let line = SrcFileData::read_file_filter(line.to_string());
         assert!(line == "    ");
     }
     #[test]
