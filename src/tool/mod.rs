@@ -1,12 +1,9 @@
 use color_eyre::{eyre::Ok, Result};
 use libc::ptsname;
 use ratatui::layout::{Constraint, Layout, Rect};
-use std::any::Any;
 use std::ffi::CStr;
 use std::hash::Hash;
 use std::rc::Rc;
-
-use crate::mi::disassemble::DisassembleFunctionLine;
 
 pub fn get_pty_name(fd: i32) -> Result<String> {
     let name = unsafe { ptsname(fd) };
@@ -46,6 +43,4 @@ pub trait HighlightFileData {
         end: usize,
     ) -> (Vec<Vec<(ratatui::style::Color, String)>>, usize, usize);
 }
-pub trait FileData: Any + TextFileData + HighlightFileData + HashSelf<std::string::String> {
-    // fn as_any(&mut self) ->&mut dyn Any ;
-} 
+pub trait FileData: TextFileData + HighlightFileData + HashSelf<std::string::String> {}

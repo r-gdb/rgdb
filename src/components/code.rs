@@ -8,7 +8,6 @@ use crate::{action, config::Config};
 use color_eyre::{eyre::Ok, Result};
 use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
-use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::Path;
@@ -27,7 +26,8 @@ pub struct Code {
     command_tx: Option<UnboundedSender<action::Action>>,
     config: Config,
 
-    files_set: HashMap<Rc<String>, Box<dyn FileData>>,
+    files_set: HashMap<Rc<String>, SrcFileData>,
+    // asm_files_set: HashMap<Rc<String>, >,
     breakpoint_set: HashMap<Rc<String>, BreakPointData>,
     file_need_show: Option<(String, u64)>,
     vertical_scroll_state: ScrollbarState,
@@ -406,7 +406,7 @@ impl Code {
             }
         }
     }
-    fn get_need_show_file(&self) -> Option<(&Box<dyn FileData>, u64)> {
+    fn get_need_show_file(&self) -> Option<(&SrcFileData, u64)> {
         match self.file_need_show {
             Some((ref file, line_id)) => match self.files_set.get(&Rc::new(file.clone())) {
                 Some(file_data) => {
@@ -750,7 +750,7 @@ impl Component for Code {
                 match self.files_set.contains_key(&file) {
                     false => {
                         if let Some(send) = self.command_tx.clone() {
-                            let file_data = Box::new(SrcFileData::new(file.clone()));
+                            let file_data = SrcFileData::new(file.clone());
                             self.files_set.insert(file_data.get_key(), file_data);
                             let read_therad = Self::read_file(file.clone(), send.clone());
                             tokio::spawn(async {
@@ -776,22 +776,10 @@ impl Component for Code {
             action::Action::Gdbmi(gdbmi::Action::BreakpointDeleted(id)) => {
                 self.breakpoint_set.remove(&Rc::new(id.to_string()));
             }
-            action::Action::Code(Action::FileReadOneLine((file, line))) => {
-                match self.files_set.remove_entry(&file) {
-                    Some((name, mut file_data)) => {
-                        let ans = file_data.downcast::<SrcFileData>();
-                        let file_data_ref = file_data.as_mut();
-                        let file_data_ref: &mut dyn Any = file_data_ref.as_any();
-                        // debug!("{:?} {:?}", &file_data_ref, &file_data_ref.type_id());
-                        let file_data_ref =
-                            file_data_ref.downcast_mut::<&mut SrcFileData>().unwrap();
-                        file_data_ref.add_line(line);
-                        self.files_set.insert(name, file_data);
-                    }
-                    _ => {
-                        error!("file {} not found", &file);
-                    }
-                }
+            action::Action::Code(Action::FileReadOneLine((file_name, line))) => {
+                self.files_set.entry(file_name.into()).and_modify(|file| {
+                    file.add_line(line);
+                });
             }
             action::Action::Code(Action::FileReadEnd(file)) => {
                 match self.files_set.remove_entry(&file) {
@@ -816,20 +804,10 @@ impl Component for Code {
                     }
                 }
             }
-            action::Action::Code(Action::FilehighlightLine((file, line))) => {
-                match self.files_set.remove_entry(&file) {
-                    Some((name, mut file_data)) => {
-                        let file_data_ref = file_data.as_mut();
-                        let file_data_ref: &mut dyn Any = file_data_ref.as_any();
-                        let file_data_ref =
-                            file_data_ref.downcast_mut::<&mut SrcFileData>().unwrap();
-                        file_data_ref.add_highlight_line(line);
-                        self.files_set.insert(name, file_data);
-                    }
-                    _ => {
-                        error!("file {} not found", &file);
-                    }
-                }
+            action::Action::Code(Action::FilehighlightLine((file_name, line))) => {
+                self.files_set.entry(file_name.into()).and_modify(|file| {
+                    file.add_highlight_line(line);
+                });
             }
             action::Action::Code(Action::FilehighlightEnd(file)) => {
                 match self.files_set.remove_entry(&file) {
