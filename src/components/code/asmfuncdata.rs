@@ -95,6 +95,10 @@ impl AsmFuncData {
             .last()
             .map(|l| l.offset.to_string().len());
         if let Some(len) = len {
+            self.lines.push(format!(
+                "Dump of assembler code for function {}:",
+                &lines.func
+            ));
             lines.insts.iter().for_each(|line| {
                 let space =
                     std::iter::repeat_n(" ", len.saturating_sub(line.offset.to_string().len()))
@@ -105,7 +109,9 @@ impl AsmFuncData {
                 );
                 self.lines.push(line);
             });
-            self.create_addr_map(lines);
+            self.lines.push("End of assembler dump.".to_string());
+
+            self.create_addr_map(lines, 1_usize);
         }
     }
     pub fn add_highlight_lines(&mut self, _func: &DisassembleFunction) {
@@ -138,7 +144,7 @@ impl AsmFuncData {
             _ => None,
         }
     }
-    fn create_addr_map(&mut self, func: &DisassembleFunction) {
+    fn create_addr_map(&mut self, func: &DisassembleFunction, base_offset: usize) {
         self.addrs = func
             .insts
             .iter()
@@ -149,7 +155,7 @@ impl AsmFuncData {
                     line.address.get(2..line.address.len()),
                 ) {
                     (true, Some(addr)) => {
-                        let id = id.saturating_add(1);
+                        let id = id.saturating_add(1).saturating_add(base_offset);
                         u64::from_str_radix(addr, 16).map_or(None, |addr| Some((addr, id as u64)))
                     }
                     _ => {
