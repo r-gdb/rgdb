@@ -236,14 +236,33 @@ fn show_asm(a: &OutOfBandRecordType) -> Option<(String, String)> {
     let mut ret = None;
     let OutOfBandRecordType::AsyncRecord(a) = a;
     match a {
-        AsyncRecordType::ExecAsyncOutput(a) => {
-            if a.async_output.async_class == AsyncClassType::Stopped {
-                a.async_output.resaults.iter().for_each(|r| {
-                    if let Some(a) = get_from_frame(r) {
-                        ret = Some(a);
-                    }
-                });
-            }
+        AsyncRecordType::ExecAsyncOutput(ExecAsyncOutputType {
+            async_output:
+                AsyncOutputType {
+                    async_class: AsyncClassType::Stopped,
+                    resaults,
+                    ..
+                },
+        }) => {
+            resaults.iter().for_each(|r| {
+                if let Some(a) = get_from_frame(r) {
+                    ret = Some(a);
+                }
+            });
+        }
+        AsyncRecordType::NotifyAsyncOutput(NotifyAsyncOutputType {
+            async_output:
+                AsyncOutputType {
+                    async_class: AsyncClassType::ThreadSelected,
+                    resaults,
+                    ..
+                },
+        }) => {
+            resaults.iter().for_each(|r| {
+                if let Some(a) = get_from_frame(r) {
+                    ret = Some(a);
+                }
+            });
         }
         _ => {}
     }

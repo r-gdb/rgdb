@@ -508,7 +508,7 @@ impl Code {
                 }
             }
             _ => {
-                error!("ReadAsmFunc set line fail");
+                info!("{} read not finish set show line fail", &file_name);
             }
         };
     }
