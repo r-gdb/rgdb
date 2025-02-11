@@ -52,6 +52,12 @@ pub struct FileNeedShowAsmFunc {
     pub addr: String,
 }
 
+pub enum FileDataReal<'a> {
+    None,
+    SrcFile((&'a SrcFileData, u64)),
+    AsmFile((&'a AsmFuncData, u64)),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
 pub enum Action {
     FileReadOneLine((String, String)),
@@ -70,21 +76,28 @@ impl Code {
         Self::default()
     }
 
-    fn get_need_show_file(&self) -> Option<(&dyn FileData, u64)> {
+    fn get_file_need_show(&self) -> Option<(&dyn FileData, u64)> {
+        match self.get_file_need_show_return_file() {
+            FileDataReal::None => None,
+            FileDataReal::SrcFile((file, id)) => Some((file, id)),
+            FileDataReal::AsmFile((func, id)) => Some((func, id)),
+        }
+    }
+    fn get_file_need_show_return_file(&self) -> FileDataReal {
         match &self.file_need_show {
-            FileNeedShow::None => None,
-            FileNeedShow::SrcFile(file) => match self.files_set.get(&Rc::new(file.name.clone())) {
+            FileNeedShow::None => FileDataReal::None,
+            FileNeedShow::SrcFile(file) => match self.files_set.get(&file.name) {
                 Some(file_data) => {
                     if file_data.get_read_done() {
-                        Some((file_data as &dyn FileData, file.line))
+                        FileDataReal::SrcFile((file_data, file.line))
                     } else {
                         info!("file {} not read done", &file.name);
-                        None
+                        FileDataReal::None
                     }
                 }
                 _ => {
                     error!("file {} not found", &file.name);
-                    None
+                    FileDataReal::None
                 }
             },
             FileNeedShow::AsmFile(func) => {
@@ -92,23 +105,23 @@ impl Code {
                 match self.asm_func_set.get(&Rc::new(name.clone())) {
                     Some(asm_file) => match asm_file.get_read_done() {
                         true => match asm_file.get_line_id(&func.addr) {
-                            Some(id) => Some((asm_file, id)),
+                            Some(id) => FileDataReal::AsmFile((asm_file, id)),
                             _ => {
                                 error!(
                                     "asm file {} not find {:?}, in {:?}",
                                     name, &func.addr, &asm_file
                                 );
-                                None
+                                FileDataReal::None
                             }
                         },
                         _ => {
                             info!("asm file {} not read done", name);
-                            None
+                            FileDataReal::None
                         }
                     },
                     _ => {
                         error!("asm {} not found", &name);
-                        None
+                        FileDataReal::None
                     }
                 }
             }
@@ -157,13 +170,11 @@ impl Code {
         let end = start.saturating_add(hight);
         (start, end)
     }
-    fn get_breakpoint_in_file_range(
+    fn get_breakpoint_need_show_in_range(
         &self,
-        file: &dyn FileData,
         start_line: usize,
         end_line: usize,
     ) -> HashMap<u64, bool> {
-        let file_name = file.get_file_name();
         let ans = self
             .breakpoint_set
             .iter()

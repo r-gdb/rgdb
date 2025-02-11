@@ -4,6 +4,8 @@ mod tests {
     use crate::components::code::BreakPointData;
     use crate::components::code::Code;
     use crate::components::code::SrcFileData;
+    use crate::mi::breakpointmi::BreakPointSignalActionAsm;
+    use crate::mi::breakpointmi::BreakPointSignalActionSrc;
     use crate::mi::breakpointmi::{BreakPointAction, BreakPointSignalAction};
     use crate::tool::HashSelf;
     use crate::tool::TextFileData;
@@ -141,18 +143,18 @@ mod tests {
             number: "5".to_string(),
             enabled: false,
             bps: vec![
-                BreakPointSignalAction {
+                BreakPointSignalAction::Src(BreakPointSignalActionSrc {
                     number: "5.1".to_string(),
                     enabled: true,
                     line: 34_u64,
                     fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-                },
-                BreakPointSignalAction {
+                }),
+                BreakPointSignalAction::Src(BreakPointSignalActionSrc {
                     number: "5.1".to_string(),
                     enabled: false,
                     line: 34_u64,
                     fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-                },
+                }),
             ],
         });
         let a = BreakPointData::from(&a);
@@ -173,18 +175,18 @@ mod tests {
             number: "5".to_string(),
             enabled: true,
             bps: vec![
-                BreakPointSignalAction {
+                BreakPointSignalAction::Src(BreakPointSignalActionSrc {
                     number: "5.1".to_string(),
                     enabled: true,
                     line: 34_u64,
                     fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-                },
-                BreakPointSignalAction {
+                }),
+                BreakPointSignalAction::Src(BreakPointSignalActionSrc {
                     number: "5.1".to_string(),
                     enabled: false,
                     line: 34_u64,
                     fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-                },
+                }),
             ],
         });
 

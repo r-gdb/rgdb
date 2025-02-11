@@ -1,5 +1,5 @@
 use crate::mi::disassemble::DisassembleFunction;
-use crate::tool::{FileData, HashSelf, HighlightFileData, TextFileData};
+use crate::tool::{addr_to_u64, FileData, HashSelf, HighlightFileData, TextFileData};
 use ratatui::prelude::*;
 use std::rc::Rc;
 use tracing::error;
@@ -149,19 +149,14 @@ impl AsmFuncData {
             .insts
             .iter()
             .enumerate()
-            .filter_map(|(id, line)| {
-                match (
-                    line.address.starts_with("0x"),
-                    line.address.get(2..line.address.len()),
-                ) {
-                    (true, Some(addr)) => {
-                        let id = id.saturating_add(1).saturating_add(base_offset);
-                        u64::from_str_radix(addr, 16).map_or(None, |addr| Some((addr, id as u64)))
-                    }
-                    _ => {
-                        error!("asm addr {} not an hex address", &line.address);
-                        None
-                    }
+            .filter_map(|(id, line)| match addr_to_u64(&line.address) {
+                Some(addr) => {
+                    let id = id.saturating_add(1).saturating_add(base_offset);
+                    Some((addr, id as u64))
+                }
+                _ => {
+                    error!("asm addr {} not an hex address", &line.address);
+                    None
                 }
             })
             .collect();

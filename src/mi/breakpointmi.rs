@@ -9,11 +9,23 @@ pub struct BreakPointMultipleAction {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BreakPointSignalAction {
+pub enum BreakPointSignalAction {
+    Src(BreakPointSignalActionSrc),
+    Asm(BreakPointSignalActionAsm),
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BreakPointSignalActionSrc {
     pub number: String,
     pub enabled: bool,
     pub fullname: String,
     pub line: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BreakPointSignalActionAsm {
+    pub number: String,
+    pub enabled: bool,
+    pub addr: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,6 +65,7 @@ fn get_from_signal_point(v: &ValueType) -> Option<BreakPointSignalAction> {
     let mut line = None;
     let mut number = None;
     let mut enabled = None;
+    let mut addr = None;
     if let ValueType::Tuple(Tuple::Results(rs)) = v {
         rs.iter().for_each(|r| match r.variable.as_str() {
             "fullname" => {
@@ -82,16 +95,30 @@ fn get_from_signal_point(v: &ValueType) -> Option<BreakPointSignalAction> {
                     _ => None,
                 };
             }
+            "addr" => {
+                if let ValueType::Const(l) = &r.value {
+                    addr = Some(l.clone());
+                }
+            }
             _ => {}
         });
     }
-    match (file, line, number, enabled) {
-        (Some(file), Some(line), Some(number), Some(enabled)) => Some(BreakPointSignalAction {
-            number: number.clone(),
-            enabled,
-            fullname: file,
-            line,
-        }),
+    match (addr, file, line, number, enabled) {
+        (_, Some(file), Some(line), Some(number), Some(enabled)) => {
+            Some(BreakPointSignalAction::Src(BreakPointSignalActionSrc {
+                number: number.clone(),
+                enabled,
+                fullname: file,
+                line,
+            }))
+        }
+        (Some(addr), _, _, Some(number), Some(enabled)) => {
+            Some(BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
+                number: number.clone(),
+                enabled,
+                addr,
+            }))
+        }
         _ => None,
     }
 }
@@ -102,6 +129,7 @@ fn get_from_bkpt(r: &ResultType) -> Option<BreakPointAction> {
     let mut number = None;
     let mut enabled = None;
     let mut multiple = false;
+    let mut addr = None;
     let mut bps = vec![];
     if r.variable.as_str() == "bkpt" {
         if let ValueType::Tuple(Tuple::Results(rs)) = &r.value {
@@ -135,8 +163,10 @@ fn get_from_bkpt(r: &ResultType) -> Option<BreakPointAction> {
                 }
                 "addr" => {
                     if let ValueType::Const(l) = &r.value {
-                        if l == "<MULTIPLE>" {
-                            multiple = true
+                        match l.as_str() {
+                            "<MULTIPLE>" => multiple = true,
+                            "<PENDING>" => {}
+                            _ => addr = Some(l.clone()),
                         }
                     }
                 }
@@ -154,16 +184,23 @@ fn get_from_bkpt(r: &ResultType) -> Option<BreakPointAction> {
             });
         }
     }
-    match (file, line, number, enabled, multiple) {
-        (Some(file), Some(line), Some(number), Some(enabled), false) => {
-            Some(BreakPointAction::Signal(BreakPointSignalAction {
+    match (addr, file, line, number, enabled, multiple) {
+        (_, Some(file), Some(line), Some(number), Some(enabled), false) => Some(
+            BreakPointAction::Signal(BreakPointSignalAction::Src(BreakPointSignalActionSrc {
                 number: number.clone(),
                 enabled,
                 fullname: file,
                 line,
-            }))
-        }
-        (None, None, Some(number), Some(enabled), true) => {
+            })),
+        ),
+        (Some(addr), _, _, Some(number), Some(enabled), false) => Some(BreakPointAction::Signal(
+            BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
+                number: number.clone(),
+                enabled,
+                addr,
+            }),
+        )),
+        (_, None, None, Some(number), Some(enabled), true) => {
             Some(BreakPointAction::Multiple(BreakPointMultipleAction {
                 number: number.clone(),
                 enabled,

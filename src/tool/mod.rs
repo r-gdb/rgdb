@@ -1,3 +1,4 @@
+use color_eyre::eyre::eyre;
 use color_eyre::{eyre::Ok, Result};
 use libc::ptsname;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -44,3 +45,26 @@ pub trait HighlightFileData {
     ) -> (Vec<Vec<(ratatui::style::Color, String)>>, usize, usize);
 }
 pub trait FileData: TextFileData + HighlightFileData + HashSelf<std::string::String> {}
+
+pub fn addr_to_u64(value: &str) -> Option<u64> {
+    match (value.starts_with("0x"), value.get(2..value.len())) {
+        (true, Some(addr)) => {
+            u64::from_str_radix(addr, 16).map_or(None, |addr| Some((addr, id as u64)))
+        },
+        _ => {
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_addr_to_u64() {
+        assert_eq!(addr_to_u64("0x1234"), Some(0x1234_u64));
+        assert_eq!(addr_to_u64("0x00001234"), Some(0x1234_u64));
+        assert_eq!(addr_to_u64("1234"), None);
+    }
+}
