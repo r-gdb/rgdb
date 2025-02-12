@@ -160,11 +160,8 @@ mod tests {
         let a = BreakPointData::from(&a);
         let mut code = Code::new();
         code.breakpoint_set.insert(a.get_key(), a);
-        let ans = code.get_breakpoint_in_file_range(
-            &SrcFileData::new("/home/shizhilvren/tmux/environ.c".to_string()),
-            22,
-            39,
-        );
+        let ans = SrcFileData::new("/home/shizhilvren/tmux/environ.c".to_string())
+            .get_breakpoint_need_show_in_range(code.get_breakpoints(), 22, 39);
         assert!(ans == HashMap::from([(34_u64, false)]));
     }
 
@@ -193,38 +190,33 @@ mod tests {
         let a = BreakPointData::from(&a);
         let mut code = Code::new();
         code.breakpoint_set.insert(a.get_key(), a);
-        let ans = code.get_breakpoint_in_file_range(
-            &SrcFileData::new("/home/shizhilvren/tmux/environ.c".to_string()),
-            22,
-            39,
-        );
+        let ans = SrcFileData::new("/home/shizhilvren/tmux/environ.c".to_string())
+            .get_breakpoint_need_show_in_range(code.get_breakpoints(), 22, 39);
+
         assert!(ans == HashMap::from([(34_u64, true)]));
     }
 
     #[test]
     fn f_breakpoint_range_3() {
-        let a = BreakPointAction::Signal(BreakPointSignalAction {
+        let a = BreakPointAction::Signal(BreakPointSignalAction::Src(BreakPointSignalActionSrc {
             number: "2".to_string(),
             enabled: true,
             line: 34_u64,
             fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-        });
-        let b = BreakPointAction::Signal(BreakPointSignalAction {
+        }));
+        let b = BreakPointAction::Signal(BreakPointSignalAction::Src(BreakPointSignalActionSrc {
             number: "6".to_string(),
             enabled: true,
             line: 37_u64,
             fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-        });
+        }));
         let a = BreakPointData::from(&a);
         let b = BreakPointData::from(&b);
         let mut code = Code::new();
         code.breakpoint_set.insert(a.get_key(), a);
         code.breakpoint_set.insert(b.get_key(), b);
-        let ans = code.get_breakpoint_in_file_range(
-            &SrcFileData::new("/home/shizhilvren/tmux/environ.c".to_string()),
-            22,
-            36,
-        );
+        let ans = SrcFileData::new("/home/shizhilvren/tmux/environ.c".to_string())
+            .get_breakpoint_need_show_in_range(code.get_breakpoints(), 22, 36);
         assert!(ans == HashMap::from([(34_u64, true)]));
     }
 

@@ -1,6 +1,8 @@
+use crate::components::code::breakpoint::BreakPointData;
 use crate::mi::disassemble::DisassembleFunction;
 use crate::tool::{addr_to_u64, FileData, HashSelf, HighlightFileData, TextFileData};
 use ratatui::prelude::*;
+use std::collections::HashMap;
 use std::rc::Rc;
 use tracing::error;
 
@@ -48,6 +50,14 @@ impl TextFileData for AsmFuncData {
     }
     fn get_lines(&self) -> &Vec<String> {
         self.lines.as_ref()
+    }
+    fn get_breakpoint_need_show_in_range(
+        &self,
+        _breakpoints: Vec<&BreakPointData>,
+        _start_line: usize,
+        _end_line: usize,
+    ) -> HashMap<u64, bool> {
+        HashMap::new()
     }
 }
 

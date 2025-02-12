@@ -1,15 +1,17 @@
 use super::action;
+use super::breakpoint::*;
 use crate::components::code;
 use crate::tool::{FileData, HighlightFileData, TextFileData};
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::Path;
 use std::rc::Rc;
 use syntect::easy::HighlightLines;
 use syntect::parsing::SyntaxSet;
-use tokio::sync::mpsc::UnboundedSender;
-use tracing::error;
 use tokio::fs::File;
 use tokio::io::AsyncBufReadExt;
+use tokio::sync::mpsc::UnboundedSender;
+use tracing::error;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct SrcFileData {
@@ -48,6 +50,42 @@ impl TextFileData for SrcFileData {
     }
     fn get_lines(&self) -> &Vec<String> {
         self.lines.as_ref()
+    }
+    fn get_breakpoint_need_show_in_range(
+        &self,
+        breakpoints: Vec<&BreakPointData>,
+        start_line: usize,
+        end_line: usize,
+    ) -> HashMap<u64, bool> {
+        let file_name = self.get_file_name();
+        breakpoints
+            .iter()
+            .flat_map(|bp| match bp {
+                BreakPointData::Signal(BreakPointSignalData::Src(bp)) => {
+                    vec![(&bp.fullname, &bp.line, &bp.enabled)]
+                }
+                BreakPointData::Multiple(bp) => bp
+                    .bps
+                    .iter()
+                    .flat_map(|bp| match bp {
+                        BreakPointSignalData::Src(bp) => {
+                            vec![(&bp.fullname, &bp.line, &bp.enabled)]
+                        }
+                        _ => vec![],
+                    })
+                    .collect::<Vec<_>>(),
+                _ => vec![],
+            })
+            .filter(|(name, line, _)| {
+                **name == file_name && start_line <= **line as usize && **line as usize <= end_line
+            })
+            .map(|(_, line, enable)| (line, enable))
+            .fold(HashMap::new(), |mut m, (line, enable)| {
+                m.entry(*line)
+                    .and_modify(|enable_old| *enable_old |= enable)
+                    .or_insert(*enable);
+                m
+            })
     }
 }
 
@@ -185,7 +223,6 @@ impl SrcFileData {
             .replace("\u{1f}", r##"\{US}"##)
             .replace("\u{7f}", r##"\{DEL}"##)
     }
-
 
     pub async fn read_file(file: String, send: UnboundedSender<action::Action>) {
         match File::open(&file).await {

@@ -18,7 +18,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
 
 mod asmfuncdata;
-mod breakpoint;
+pub mod breakpoint;
 mod srcfiledata;
 mod test;
 
@@ -75,7 +75,6 @@ impl Code {
     pub fn new() -> Self {
         Self::default()
     }
-
     fn get_file_need_show(&self) -> Option<(&dyn FileData, u64)> {
         match self.get_file_need_show_return_file() {
             FileDataReal::None => None,
@@ -127,6 +126,9 @@ impl Code {
             }
         }
     }
+    fn get_breakpoints(&self) -> Vec<&BreakPointData>{
+        self.breakpoint_set.iter().map(|(_, val)| val).collect()
+    }
     fn set_area(&mut self, area: &layout::Size) {
         let area = Rect::new(0, 0, area.width, area.height);
         let [area, _, _, _] = tool::get_layout(area);
@@ -170,36 +172,7 @@ impl Code {
         let end = start.saturating_add(hight);
         (start, end)
     }
-    fn get_breakpoint_need_show_in_range(
-        &self,
-        start_line: usize,
-        end_line: usize,
-    ) -> HashMap<u64, bool> {
-        let ans = self
-            .breakpoint_set
-            .iter()
-            .flat_map(|(_, val)| match val {
-                BreakPointData::Signal(p) => {
-                    vec![(p.fullname.clone(), p.line, p.enabled)]
-                }
-                BreakPointData::Multiple(p) => p
-                    .bps
-                    .iter()
-                    .map(|bp| (bp.fullname.clone(), bp.line, bp.enabled && p.enabled))
-                    .collect::<Vec<_>>(),
-            })
-            .filter(|(name, line, _)| {
-                *name == file_name && start_line <= *line as usize && *line as usize <= end_line
-            })
-            .map(|(_, line, enable)| (line, enable))
-            .fold(HashMap::new(), |mut m, (line, enable)| {
-                m.entry(line)
-                    .and_modify(|enable_old| *enable_old |= enable)
-                    .or_insert(enable);
-                m
-            });
-        ans
-    }
+
     fn draw_all(
         &self,
         frame: &mut Frame,
@@ -342,7 +315,7 @@ impl Code {
         end_line: usize,
         area_ids: Rect,
     ) {
-        let bp = self.get_breakpoint_in_file_range(file, start_line, end_line);
+        let bp = file.get_breakpoint_need_show_in_range(self.get_breakpoints(), start_line, end_line);
         let ids: Vec<usize> = (start_line..end_line.saturating_add(1)).collect::<Vec<_>>();
         let text_ids = Text::from_iter(ids.iter().map(|s| {
             if let Some(enable) = bp.get(&(*s as u64)) {
@@ -379,7 +352,7 @@ impl Code {
         frame.render_stateful_widget(scrollbar, area_src, &mut state);
     }
     fn set_vertical_to_stop_point(&mut self, file_name: &String) {
-        match self.get_need_show_file() {
+        match self.get_file_need_show() {
             Some((file, line_id)) => {
                 if *file_name == file.get_file_name() {
                     self.vertical_scroll = line_id as usize;
@@ -570,7 +543,7 @@ impl Component for Code {
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
-        let ans = self.get_need_show_file().map(|(file, _line_id)| {
+        let ans = self.get_file_need_show().map(|(file, _line_id)| {
             let n = file.get_lines_len();
             let num_len = n.to_string().len() as u16;
             let [area, area_status, _, _] = tool::get_layout(area);
@@ -589,7 +562,7 @@ impl Component for Code {
                 Some(())
             });
 
-        self.get_need_show_file()
+        self.get_file_need_show()
             .map(|(file, _)| {
                 if let Some((_, _, _, area_src, _)) = ans {
                     let (start_line, end_line) =
@@ -609,7 +582,7 @@ impl Component for Code {
         let ans = if let (
             Some((n, area_ids, area_split, area_src, area_status)),
             Some((file, line_id)),
-        ) = (ans, self.get_need_show_file())
+        ) = (ans, self.get_file_need_show())
         {
             let (start_line, end_line) = self.get_windows_show_file_range(area_src.height as usize);
             let (_, start_line, end_line) = file.get_lines_range(start_line, end_line);

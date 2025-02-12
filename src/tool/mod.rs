@@ -1,7 +1,9 @@
+use crate::components::code::breakpoint::BreakPointData;
 use color_eyre::eyre::eyre;
 use color_eyre::{eyre::Ok, Result};
 use libc::ptsname;
 use ratatui::layout::{Constraint, Layout, Rect};
+use std::collections::HashMap;
 use std::ffi::CStr;
 use std::hash::Hash;
 use std::rc::Rc;
@@ -33,6 +35,12 @@ pub trait TextFileData {
     fn get_lines_len(&self) -> usize;
     fn get_lines_range(&self, start: usize, end: usize) -> (Vec<&String>, usize, usize);
     fn get_lines(&self) -> &Vec<String>;
+    fn get_breakpoint_need_show_in_range(
+        &self,
+        breakpoints: Vec<&BreakPointData>,
+        start_line: usize,
+        end_line: usize,
+    ) -> HashMap<u64, bool>;
 }
 
 pub trait HighlightFileData {
@@ -48,12 +56,8 @@ pub trait FileData: TextFileData + HighlightFileData + HashSelf<std::string::Str
 
 pub fn addr_to_u64(value: &str) -> Option<u64> {
     match (value.starts_with("0x"), value.get(2..value.len())) {
-        (true, Some(addr)) => {
-            u64::from_str_radix(addr, 16).map_or(None, |addr| Some((addr, id as u64)))
-        },
-        _ => {
-            None
-        }
+        (true, Some(addr)) => u64::from_str_radix(addr, 16).map_or(None, |addr| Some(addr)),
+        _ => None,
     }
 }
 
