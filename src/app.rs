@@ -51,7 +51,7 @@ impl App {
             false => gdb_args
                 .into_iter()
                 .chain(std::iter::once("--args".to_string()))
-                .chain(args.into_iter())
+                .chain(args)
                 .collect::<Vec<_>>(),
         };
         let (action_tx, action_rx) = mpsc::unbounded_channel();

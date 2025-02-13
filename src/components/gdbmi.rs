@@ -195,7 +195,7 @@ impl Component for Gdbmi {
             }
             action::Action::Gdbmi(Action::DisassembleAsm(func)) => {
                 if let Some(write) = self.gdb_mi_writer.as_mut() {
-                    write!(write, "-data-disassemble -a {} -- 1\n", func)?;
+                    writeln!(write, "-data-disassemble -a {} -- 1", func)?;
                 }
                 Ok(None)
             }

@@ -55,7 +55,7 @@ pub trait FileData: TextFileData + HighlightFileData + HashSelf<std::string::Str
 
 pub fn addr_to_u64(value: &str) -> Option<u64> {
     match (value.starts_with("0x"), value.get(2..value.len())) {
-        (true, Some(addr)) => u64::from_str_radix(addr, 16).map_or(None, |addr| Some(addr)),
+        (true, Some(addr)) => u64::from_str_radix(addr, 16).ok(),
         _ => None,
     }
 }

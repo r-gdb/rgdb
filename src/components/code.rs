@@ -127,7 +127,7 @@ impl Code {
         }
     }
     fn get_breakpoints(&self) -> Vec<&BreakPointData> {
-        self.breakpoint_set.iter().map(|(_, val)| val).collect()
+        self.breakpoint_set.values().collect()
     }
     fn set_area(&mut self, area: &layout::Size) {
         let area = Rect::new(0, 0, area.width, area.height);
@@ -225,8 +225,7 @@ impl Code {
                 true => file
                     .get_lines_range(point_line, point_line + 1)
                     .0
-                    .iter()
-                    .nth(0)
+                    .get(0)
                     .and_then(|s| (**s).chars().enumerate().find(|(_, c)| *c != ' '))
                     .map(|(id, _)| id.saturating_sub(self.horizontial_scroll)),
                 _ => None,

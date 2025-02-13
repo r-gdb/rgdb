@@ -372,7 +372,7 @@ mod tests {
     fn f_get_line_id() {
         let asm = AsmFuncData {
             func_name: std::rc::Rc::new("main".to_string()),
-            addrs: vec![(0x01a as u64, 2), (0x02b as u64, 3), (0x12b as u64, 5)],
+            addrs: vec![(0x01a_u64, 2), (0x02b_u64, 3), (0x12b_u64, 5)],
             lines: vec![],
             lines_highlight: vec![],
             read_done: true,

@@ -47,10 +47,7 @@ impl Gdbtty {
         let ans = self
             .gdb_process
             .as_mut()
-            .is_some_and(|p| match p.try_wait() {
-                std::result::Result::Ok(Some(_)) => true,
-                _ => false,
-            });
+            .is_some_and(|p| matches!(p.try_wait(), std::result::Result::Ok(Some(_))));
         ans
     }
     fn set_gdb_path(&mut self, path: String) {
@@ -258,16 +255,15 @@ impl Component for Gdbtty {
         &mut self,
         key: crossterm::event::KeyEvent,
     ) -> Result<Option<action::Action>> {
-        if self.handle_key() {
-            if key.code != crossterm::event::KeyCode::Esc {
-                if let Some(bytes) = Gdbtty::handle_pane_key_event(&key) {
-                    let bytes = bytes.into_iter().map(char::from).collect::<String>();
-                    if let Some(write) = self.gdb_writer.as_mut() {
-                        write!(write, "{}", bytes.as_str())?;
-                    }
-                };
+        if self.handle_key() && key.code != crossterm::event::KeyCode::Esc {
+            if let Some(bytes) = Gdbtty::handle_pane_key_event(&key) {
+                let bytes = bytes.into_iter().map(char::from).collect::<String>();
+                if let Some(write) = self.gdb_writer.as_mut() {
+                    write!(write, "{}", bytes.as_str())?;
+                }
             }
         }
+
         Ok(None)
     }
 

@@ -59,8 +59,7 @@ impl StatusBar {
             Mode::Gdb => "GDB",
             Mode::Code => "CODE",
         };
-        let hit = Span::from(mode_name).fg(Color::Gray).bg(Color::Black);
-        hit
+        Span::from(mode_name).fg(Color::Gray).bg(Color::Black)
     }
 
     fn draw_all(&mut self, frame: &mut Frame, area: Rect) {
@@ -75,8 +74,7 @@ impl StatusBar {
         let s = Span::from(" ").bg(Color::Black);
         let hits = hit
             .into_iter()
-            .map(|it| vec![it, s.clone()])
-            .flatten()
+            .flat_map(|it| vec![it, s.clone()])
             .chain(std::iter::once(mode_name));
         let line = Line::from_iter(hits);
         let paragraph_status = Paragraph::new(line)

@@ -20,7 +20,7 @@ pub fn get_disassemble_function(r: ResultRecordType) -> Option<DisassembleFuncti
     let mut func = None;
     let mut insts = vec![];
     if r.result_class == ResultClassType::Done {
-        r.results.into_iter().next().map(|v| {
+        if let Some(v) = r.results.into_iter().next() {
             if v.variable == "asm_insns" {
                 if let ValueType::List(List::Values(l)) = v.value {
                     l.into_iter().for_each(|v| {
@@ -38,7 +38,7 @@ pub fn get_disassemble_function(r: ResultRecordType) -> Option<DisassembleFuncti
                     });
                 }
             }
-        });
+        };
     }
 
     match (func, same) {
@@ -84,8 +84,8 @@ fn get_disassemble_function_line(tuple: ValueType) -> Option<(String, Disassembl
         (Some(addr), Some(func), Some(offset), Some(inst)) => {
             let dfl = DisassembleFunctionLine {
                 address: addr,
-                offset: offset,
-                inst: inst,
+                offset,
+                inst,
             };
             Some((func, dfl))
         }

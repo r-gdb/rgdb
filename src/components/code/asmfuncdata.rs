@@ -87,7 +87,6 @@ impl TextFileData for AsmFuncData {
                     _ => None,
                 }
             })
-            .map(|(line, enable)| (line, enable))
             .fold(HashMap::new(), |mut m, (line, enable)| {
                 m.entry(line)
                     .and_modify(|enable_old| *enable_old |= enable)
