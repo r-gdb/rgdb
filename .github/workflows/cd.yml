@@ -90,6 +90,14 @@ jobs:
           profile: minimal
           override: true
       - uses: Swatinem/rust-cache@v2
+      - name: install strip command
+        shell: bash
+        run: |
+          sudo apt update
+          sudo apt install -y binutils
+          sudo apt install -y musl
+          sudo apt install -y musl-tools
+
       - name: Cargo build
         uses: actions-rs/cargo@v1
         with:
@@ -101,15 +109,7 @@ jobs:
 
           args: --release --target ${{ matrix.target }}
 
-
-      - name: install strip command
-        shell: bash
-        run: |
-          sudo apt update
-          sudo apt install -y binutils
-          sudo apt-get install -y musl
-          sudo apt-get install -y musl-tools
-
+    
 
           
       - name: Packaging final binary
