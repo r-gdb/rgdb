@@ -4,7 +4,6 @@ mod tests {
     use crate::components::code::BreakPointData;
     use crate::components::code::Code;
     use crate::components::code::SrcFileData;
-    use crate::mi::breakpointmi::BreakPointSignalActionAsm;
     use crate::mi::breakpointmi::BreakPointSignalActionSrc;
     use crate::mi::breakpointmi::{BreakPointAction, BreakPointSignalAction};
     use crate::tool::HashSelf;
@@ -162,6 +161,7 @@ mod tests {
         code.breakpoint_set.insert(a.get_key(), a);
         let ans = SrcFileData::new("/home/shizhilvren/tmux/environ.c".to_string())
             .get_breakpoint_need_show_in_range(code.get_breakpoints(), 22, 39);
+        println!("{:?}", ans);
         assert!(ans == HashMap::from([(34_u64, false)]));
     }
 

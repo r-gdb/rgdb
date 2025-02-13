@@ -62,16 +62,16 @@ impl TextFileData for SrcFileData {
             .iter()
             .flat_map(|bp| match bp {
                 BreakPointData::Signal(BreakPointSignalData::Src(bp)) => {
-                    vec![(&bp.fullname, &bp.line, &bp.enabled)]
+                    vec![(&bp.fullname, &bp.line, bp.enabled)]
                 }
-                BreakPointData::Multiple(bp) => bp
+                BreakPointData::Multiple(bpm) => bpm
                     .bps
                     .iter()
-                    .flat_map(|bp| match bp {
+                    .filter_map(|bp| match bp {
                         BreakPointSignalData::Src(bp) => {
-                            vec![(&bp.fullname, &bp.line, &bp.enabled)]
+                            Some((&bp.fullname, &bp.line, (bp.enabled && bpm.enabled)))
                         }
-                        _ => vec![],
+                        _ => None,
                     })
                     .collect::<Vec<_>>(),
                 _ => vec![],
@@ -83,7 +83,7 @@ impl TextFileData for SrcFileData {
             .fold(HashMap::new(), |mut m, (line, enable)| {
                 m.entry(*line)
                     .and_modify(|enable_old| *enable_old |= enable)
-                    .or_insert(*enable);
+                    .or_insert(enable);
                 m
             })
     }

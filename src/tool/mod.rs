@@ -1,5 +1,4 @@
 use crate::components::code::breakpoint::BreakPointData;
-use color_eyre::eyre::eyre;
 use color_eyre::{eyre::Ok, Result};
 use libc::ptsname;
 use ratatui::layout::{Constraint, Layout, Rect};
