@@ -126,7 +126,7 @@ impl Code {
             }
         }
     }
-    fn get_breakpoints(&self) -> Vec<&BreakPointData>{
+    fn get_breakpoints(&self) -> Vec<&BreakPointData> {
         self.breakpoint_set.iter().map(|(_, val)| val).collect()
     }
     fn set_area(&mut self, area: &layout::Size) {
@@ -315,7 +315,8 @@ impl Code {
         end_line: usize,
         area_ids: Rect,
     ) {
-        let bp = file.get_breakpoint_need_show_in_range(self.get_breakpoints(), start_line, end_line);
+        let bp =
+            file.get_breakpoint_need_show_in_range(self.get_breakpoints(), start_line, end_line);
         let ids: Vec<usize> = (start_line..end_line.saturating_add(1)).collect::<Vec<_>>();
         let text_ids = Text::from_iter(ids.iter().map(|s| {
             if let Some(enable) = bp.get(&(*s as u64)) {

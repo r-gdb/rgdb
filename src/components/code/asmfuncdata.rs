@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use tracing::error;
 
+use super::breakpoint::BreakPointSignalData;
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AsmFuncData {
     pub func_name: Rc<String>,
@@ -53,11 +55,45 @@ impl TextFileData for AsmFuncData {
     }
     fn get_breakpoint_need_show_in_range(
         &self,
-        _breakpoints: Vec<&BreakPointData>,
-        _start_line: usize,
-        _end_line: usize,
+        breakpoints: Vec<&BreakPointData>,
+        start_line: usize,
+        end_line: usize,
     ) -> HashMap<u64, bool> {
-        HashMap::new()
+        breakpoints
+            .iter()
+            .flat_map(|bp| match bp {
+                BreakPointData::Signal(BreakPointSignalData::Asm(bp)) => {
+                    vec![(&bp.addr, bp.enabled)]
+                }
+                BreakPointData::Multiple(bpm) => bpm
+                    .bps
+                    .iter()
+                    .filter_map(|bp| match bp {
+                        BreakPointSignalData::Asm(bp) => {
+                            Some((&bp.addr, (bp.enabled && bpm.enabled)))
+                        }
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>(),
+                _ => vec![],
+            })
+            .filter_map(|(addr, enable)| {
+                let line = self.get_line_id(addr);
+                match line {
+                    Some(line) => match start_line <= line as usize && line as usize <= end_line {
+                        true => Some((line, enable)),
+                        false => None,
+                    },
+                    _ => None,
+                }
+            })
+            .map(|(line, enable)| (line, enable))
+            .fold(HashMap::new(), |mut m, (line, enable)| {
+                m.entry(line)
+                    .and_modify(|enable_old| *enable_old |= enable)
+                    .or_insert(enable);
+                m
+            })
     }
 }
 

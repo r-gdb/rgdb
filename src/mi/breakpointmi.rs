@@ -360,12 +360,14 @@ mod tests {
         let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-created,bkpt={number=\"1\",type=\"breakpoint\",disp=\"del\",enabled=\"y\",addr=\"0x0000000000404570\",func=\"main\",file=\"tmux.c\",fullname=\"/home/shizhilvren/tmux/tmux.c\",line=\"355\",thread-groups=[\"i1\"],times=\"0\",original-location=\"main\"}\n" );
         let bkpt = show_bkpt(&a.unwrap());
         assert!(
-            bkpt == Some(BreakPointAction::Signal(BreakPointSignalAction::Src(BreakPointSignalActionSrc {
-                number: "1".to_string(),
-                enabled: true,
-                fullname: "/home/shizhilvren/tmux/tmux.c".to_string(),
-                line: 355_u64,
-            })))
+            bkpt == Some(BreakPointAction::Signal(BreakPointSignalAction::Src(
+                BreakPointSignalActionSrc {
+                    number: "1".to_string(),
+                    enabled: true,
+                    fullname: "/home/shizhilvren/tmux/tmux.c".to_string(),
+                    line: 355_u64,
+                }
+            )))
         );
     }
 
@@ -374,12 +376,14 @@ mod tests {
         let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-modified,bkpt={number=\"2\",type=\"breakpoint\",disp=\"keep\",enabled=\"n\",addr=\"0x0000000000404570\",func=\"main\",file=\"tmux.c\",fullname=\"/home/shizhilvren/tmux/tmux.c\",line=\"355\",thread-groups=[\"i1\"],cond=\"1==2\",times=\"0\",original-location=\"main\"}\n"  );
         let bkpt = show_bkpt(&a.unwrap());
         assert!(
-            bkpt == Some(BreakPointAction::Signal(BreakPointSignalAction::Src(BreakPointSignalActionSrc {
-                number: "2".to_string(),
-                enabled: false,
-                fullname: "/home/shizhilvren/tmux/tmux.c".to_string(),
-                line: 355_u64,
-            })))
+            bkpt == Some(BreakPointAction::Signal(BreakPointSignalAction::Src(
+                BreakPointSignalActionSrc {
+                    number: "2".to_string(),
+                    enabled: false,
+                    fullname: "/home/shizhilvren/tmux/tmux.c".to_string(),
+                    line: 355_u64,
+                }
+            )))
         );
     }
 

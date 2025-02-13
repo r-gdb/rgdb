@@ -4,8 +4,10 @@ mod tests {
     use crate::components::code::BreakPointData;
     use crate::components::code::Code;
     use crate::components::code::SrcFileData;
+    use crate::mi::breakpointmi::BreakPointSignalActionAsm;
     use crate::mi::breakpointmi::BreakPointSignalActionSrc;
     use crate::mi::breakpointmi::{BreakPointAction, BreakPointSignalAction};
+    use crate::mi::disassemble::DisassembleFunctionLine;
     use crate::tool::HashSelf;
     use crate::tool::TextFileData;
     use std::collections::HashMap;
@@ -218,6 +220,152 @@ mod tests {
         let ans = SrcFileData::new("/home/shizhilvren/tmux/environ.c".to_string())
             .get_breakpoint_need_show_in_range(code.get_breakpoints(), 22, 36);
         assert!(ans == HashMap::from([(34_u64, true)]));
+    }
+    #[test]
+    fn f_breakpoint_range_4() {
+        use crate::mi::breakpointmi::BreakPointMultipleAction;
+        use crate::mi::disassemble::DisassembleFunction;
+        let a = BreakPointAction::Multiple(BreakPointMultipleAction {
+            number: "5".to_string(),
+            enabled: false,
+            bps: vec![
+                BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
+                    number: "5.1".to_string(),
+                    enabled: true,
+                    addr: "0x000001a".to_string(),
+                }),
+                BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
+                    number: "5.1".to_string(),
+                    enabled: false,
+                    addr: "0x000001a".to_string(),
+                }),
+            ],
+        });
+        let a = BreakPointData::from(&a);
+        let mut code = Code::new();
+        code.breakpoint_set.insert(a.get_key(), a);
+        let disassemble = DisassembleFunction {
+            func: "main".to_string(),
+            insts: vec![
+                DisassembleFunctionLine {
+                    address: "0x0000001".to_string(),
+                    inst: "mov eax, 0x0".to_string(),
+                    offset: 1_u64,
+                },
+                DisassembleFunctionLine {
+                    address: "0x000001a".to_string(),
+                    inst: "mov eax, 0x0".to_string(),
+                    offset: 2_u64,
+                },
+                DisassembleFunctionLine {
+                    address: "0x000003b".to_string(),
+                    inst: "mov eax, 0x0".to_string(),
+                    offset: 5_u64,
+                },
+            ],
+        };
+        let mut ans = AsmFuncData::new("main".to_string());
+        ans.add_lines(&disassemble);
+        let ans = ans.get_breakpoint_need_show_in_range(code.get_breakpoints(), 2, 3);
+        println!("{:?}", ans);
+        assert!(ans == HashMap::from([(3_u64, false)]));
+    }
+
+    #[test]
+    fn f_breakpoint_range_5() {
+        use crate::mi::breakpointmi::BreakPointMultipleAction;
+        use crate::mi::disassemble::DisassembleFunction;
+        let a = BreakPointAction::Multiple(BreakPointMultipleAction {
+            number: "5".to_string(),
+            enabled: true,
+            bps: vec![
+                BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
+                    number: "5.1".to_string(),
+                    enabled: true,
+                    addr: "0x000001a".to_string(),
+                }),
+                BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
+                    number: "5.1".to_string(),
+                    enabled: false,
+                    addr: "0x000001a".to_string(),
+                }),
+            ],
+        });
+        let a = BreakPointData::from(&a);
+        let mut code = Code::new();
+        code.breakpoint_set.insert(a.get_key(), a);
+        let disassemble = DisassembleFunction {
+            func: "main".to_string(),
+            insts: vec![
+                DisassembleFunctionLine {
+                    address: "0x0000001".to_string(),
+                    inst: "mov eax, 0x0".to_string(),
+                    offset: 1_u64,
+                },
+                DisassembleFunctionLine {
+                    address: "0x000001a".to_string(),
+                    inst: "mov eax, 0x0".to_string(),
+                    offset: 2_u64,
+                },
+                DisassembleFunctionLine {
+                    address: "0x000003b".to_string(),
+                    inst: "mov eax, 0x0".to_string(),
+                    offset: 5_u64,
+                },
+            ],
+        };
+        let mut ans = AsmFuncData::new("main".to_string());
+        ans.add_lines(&disassemble);
+        let ans = ans.get_breakpoint_need_show_in_range(code.get_breakpoints(), 2, 3);
+        println!("{:?}", ans);
+        assert!(ans == HashMap::from([(3_u64, true)]));
+    }
+
+    #[test]
+    fn f_breakpoint_range_6() {
+        use crate::mi::breakpointmi::BreakPointSignalAction;
+        use crate::mi::disassemble::DisassembleFunction;
+        let a = BreakPointAction::Signal(BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
+            number: "2".to_string(),
+            enabled: true,
+            addr: "0x000001a".to_string(),
+        }));
+        let b = BreakPointAction::Signal(BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
+            number: "10".to_string(),
+            enabled: false,
+            addr: "0x000003b".to_string(),
+        }));
+
+        let a = BreakPointData::from(&a);
+        let b = BreakPointData::from(&b);
+        let mut code = Code::new();
+        code.breakpoint_set.insert(a.get_key(), a);
+        code.breakpoint_set.insert(b.get_key(), b);
+        let disassemble = DisassembleFunction {
+            func: "main".to_string(),
+            insts: vec![
+                DisassembleFunctionLine {
+                    address: "0x0000001".to_string(),
+                    inst: "mov eax, 0x0".to_string(),
+                    offset: 1_u64,
+                },
+                DisassembleFunctionLine {
+                    address: "0x000001a".to_string(),
+                    inst: "mov eax, 0x0".to_string(),
+                    offset: 2_u64,
+                },
+                DisassembleFunctionLine {
+                    address: "0x000003b".to_string(),
+                    inst: "mov eax, 0x0".to_string(),
+                    offset: 5_u64,
+                },
+            ],
+        };
+        let mut ans = AsmFuncData::new("main".to_string());
+        ans.add_lines(&disassemble);
+        let ans = ans.get_breakpoint_need_show_in_range(code.get_breakpoints(), 2, 4);
+        println!("{:?}", ans);
+        assert!(ans == HashMap::from([(3_u64, true), (4_u64, false)]));
     }
 
     #[test]
