@@ -69,7 +69,7 @@ jobs:
             architecture: i686
             binary-postfix: ""
             use-cross: true
-            binary-name: v
+            binary-name: rgdb-musl
           # - os: windows-latest
           #   os-name: windows
           #   target: x86_64-pc-windows-msvc
@@ -105,17 +105,11 @@ jobs:
       - name: install strip command
         shell: bash
         run: |
-          case ${{ matrix.os }} in
-              aarch64-unknown-linux-gnu)
-                  sudo apt update
-                  sudo apt install -y binutils
-                  ;;
-              *-musl)
-                  sudo apt update
-                  sudo apt-get install -y musl
-                  sudo apt-get install -y musl-tools
-                  ;;
-          esac
+          sudo apt update
+          sudo apt install -y binutils
+          sudo apt-get install -y musl
+          sudo apt-get install -y musl-tools
+
 
           
       - name: Packaging final binary
