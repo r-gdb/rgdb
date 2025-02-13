@@ -93,10 +93,10 @@ jobs:
       - name: install strip command
         shell: bash
         run: |
-          sudo apt update
-          sudo apt install -y binutils
-          sudo apt install -y musl
-          sudo apt install -y musl-tools
+          sudo apt-get update
+          sudo apt-get install -y binutils
+          sudo apt-get install -y musl
+          sudo apt-get install -y musl-tools
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
