@@ -20,6 +20,7 @@ jobs:
             architecture: x86_64
             binary-postfix: ""
             binary-name: rgdb
+            package-name: ""
             use-cross: false
           - os: macos-latest
             os-name: macos
@@ -27,6 +28,7 @@ jobs:
             architecture: arm64
             binary-postfix: ""
             use-cross: false
+            package-name: ""
             binary-name: rgdb
           - os: ubuntu-latest
             os-name: linux
@@ -34,20 +36,23 @@ jobs:
             architecture: x86_64
             binary-postfix: ""
             use-cross: false
+            package-name: ""
             binary-name: rgdb
           - os: ubuntu-latest
             os-name: linux
             target: x86_64-unknown-linux-musl
             architecture: x86_64
             binary-postfix: ""
+            package-name: "musl"
             use-cross: false
-            binary-name: rgdb-musl
+            binary-name: rgdb
           - os: ubuntu-latest
             os-name: linux
             target: aarch64-unknown-linux-gnu
             architecture: arm64
             binary-postfix: ""
             use-cross: true
+            package-name: ""
             binary-name: rgdb
           - os: ubuntu-latest
             os-name: linux
@@ -55,21 +60,24 @@ jobs:
             architecture: arm64
             binary-postfix: ""
             use-cross: true
-            binary-name: rgdb-musl
+            package-name: "musl"
+            binary-name: rgdb
           - os: ubuntu-latest
             os-name: linux
             target: i686-unknown-linux-gnu
             architecture: i686
             binary-postfix: ""
             use-cross: true
+            package-name: ""
             binary-name: rgdb
-          - os: ubuntu-latest
+          - os: ubuntu-latest 
             os-name: linux
             target: i686-unknown-linux-musl
             architecture: i686
             binary-postfix: ""
             use-cross: true
-            binary-name: rgdb-musl
+            package-name: "musl"
+            binary-name: rgdb
           # - os: windows-latest
           #   os-name: windows
           #   target: x86_64-pc-windows-msvc
@@ -136,7 +144,7 @@ jobs:
 
           ########## create tar.gz ##########
 
-          RELEASE_NAME=${{ matrix.binary-name }}-${GITHUB_REF/refs\/tags\//}-${{ matrix.os-name }}-${{ matrix.architecture }}-${{ matrix.binary-postfix }}
+          RELEASE_NAME=${{ matrix.binary-name }}-${GITHUB_REF/refs\/tags\//}-${{ matrix.os-name }}-${{ matrix.package-name }}-${{ matrix.architecture }}-${{ matrix.binary-postfix }}
 
           tar czvf $RELEASE_NAME.tar.gz $BINARY_NAME
 
