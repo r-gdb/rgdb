@@ -17,8 +17,6 @@ set_gcc_prefix(){
             GCC_PREFIX=""
         ;;
     esac
-    
-    
 }
 
 compile(){

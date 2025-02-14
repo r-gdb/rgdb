@@ -93,10 +93,17 @@ jobs:
       - name: install strip command
         shell: bash
         run: |
-          sudo apt update
-          sudo apt-get install -y binutils
-          sudo apt-get install -y musl
-          sudo apt-get install -y musl-tools
+          case "${{ matrix.os }}" in
+              macos-latest)
+                echo "mac"  
+              ;;
+              ubuntu-latest)
+                sudo apt update
+                sudo apt-get install -y binutils
+                sudo apt-get install -y musl
+                sudo apt-get install -y musl-tools
+              ;;
+          esac
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
