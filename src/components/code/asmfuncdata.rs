@@ -1,5 +1,6 @@
 use crate::components::code::breakpoint::BreakPointData;
 use crate::mi::disassemble::DisassembleFunction;
+use crate::tool;
 use crate::tool::{addr_to_u64, FileData, HashSelf, HighlightFileData, TextFileData};
 use ratatui::prelude::*;
 use std::collections::HashMap;
@@ -141,7 +142,7 @@ impl AsmFuncData {
             .map(|l| l.offset.to_string().len());
         if let Some(len) = len {
             self.lines.push(format!(
-                "Dump of assembler code for function {}:",
+                "Dump of assembler code for function {}:\n",
                 &lines.func
             ));
             lines.insts.iter().for_each(|line| {
@@ -160,11 +161,63 @@ impl AsmFuncData {
         }
     }
     pub fn add_highlight_lines(&mut self, _func: &DisassembleFunction) {
+        let ext = "asm";
+        let theme = tool::get_theme();
+        let ps = tool::get_syntax_set(ext);
         let lines = self.get_lines();
-        self.lines_highlight = lines
-            .iter()
-            .map(|line| vec![(Color::White, line.clone())])
-            .collect();
+
+        if let Some(syntax) = ps.find_syntax_by_extension(ext) {
+            let mut h = syntect::easy::HighlightLines::new(syntax, &theme);
+            self.lines_highlight = lines
+                .iter()
+                .enumerate()
+                .map(|(id, line)| {
+                    if id == 0 {
+                        vec![
+                            (
+                                Color::White,
+                                "Dump of assembler code for function ".to_string(),
+                            ),
+                            (Color::Blue, self.get_file_name()),
+                            (Color::White, ":\n".to_string()),
+                        ]
+                    } else if id == lines.len().saturating_sub(1) {
+                        vec![(Color::White, line.clone())]
+                    } else {
+                        match h.highlight_line(line, &ps) {
+                            std::result::Result::Ok(ranges) => ranges
+                                .into_iter()
+                                .map(|(c, s)| {
+                                    (
+                                        ratatui::style::Color::Rgb(
+                                            c.foreground.r,
+                                            c.foreground.g,
+                                            c.foreground.b,
+                                        ),
+                                        s.to_string(),
+                                    )
+                                })
+                                .collect(),
+                            std::result::Result::Err(e) => {
+                                error!(
+                                    "file {} highlight fail {} {}",
+                                    &self.get_file_name(),
+                                    &line,
+                                    e
+                                );
+                                vec![(Color::White, line.clone())]
+                            }
+                        }
+                    }
+                })
+                .collect();
+        } else {
+            error!("file {} not have extension", &ext);
+            self.lines_highlight = lines
+                .iter()
+                .map(|line| vec![(Color::White, line.clone())])
+                .collect();
+        }
     }
     pub fn get_line_id(&self, addr: &String) -> Option<u64> {
         match (addr.starts_with("0x"), addr.get(2..addr.len())) {

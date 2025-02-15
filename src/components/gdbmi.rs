@@ -193,9 +193,9 @@ impl Component for Gdbmi {
                 let path = self.start_gdb_mi()?;
                 Ok(Some(action::Action::Gdbtty(gdbtty::Action::Start(path))))
             }
-            action::Action::Gdbmi(Action::DisassembleAsm(func)) => {
+            action::Action::Gdbmi(Action::DisassembleAsm(addr)) => {
                 if let Some(write) = self.gdb_mi_writer.as_mut() {
-                    writeln!(write, "-data-disassemble -a {} -- 1", func)?;
+                    writeln!(write, "-data-disassemble -a {} -- 1", addr)?;
                 }
                 Ok(None)
             }

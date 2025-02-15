@@ -520,16 +520,14 @@ impl Component for Code {
             action::Action::Gdbmi(gdbmi::Action::ShowAsm((func, addr))) => {
                 self.file_need_show = FileNeedShow::AsmFile(FileNeedShowAsmFunc {
                     name: func.clone(),
-                    addr,
+                    addr: addr.clone(),
                 });
                 match self.asm_func_set.contains_key(&func) {
                     false => {
                         let file_data = AsmFuncData::new(func.clone());
                         self.asm_func_set.insert(file_data.get_key(), file_data);
                         debug!("asm file {} start", &func);
-                        ret = Some(action::Action::Gdbmi(gdbmi::Action::DisassembleAsm(
-                            func.clone(),
-                        )));
+                        ret = Some(action::Action::Gdbmi(gdbmi::Action::DisassembleAsm(addr)));
                     }
                     true => {
                         debug!("asm {} has read", &func);

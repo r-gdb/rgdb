@@ -131,7 +131,6 @@ jobs:
 
           cd target/${{ matrix.target }}/release
 
-
           ####### reduce binary size by removing debug symbols #######
 
           BINARY_NAME=${{ matrix.binary-name }}${{ matrix.binary-postfix }}

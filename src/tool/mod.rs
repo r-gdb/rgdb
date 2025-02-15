@@ -6,6 +6,9 @@ use std::collections::HashMap;
 use std::ffi::CStr;
 use std::hash::Hash;
 use std::rc::Rc;
+use tracing::error;
+const NORD_THEME: &str = include_str!("../themes/Nord.tmTheme");
+const ASSEMBLY_X86_64: &str = include_str!("../syntaxes/assembly_x86_64.sublime-syntax");
 
 pub fn get_pty_name(fd: i32) -> Result<String> {
     let name = unsafe { ptsname(fd) };
@@ -60,6 +63,37 @@ pub fn addr_to_u64(value: &str) -> Option<u64> {
     }
 }
 
+pub fn get_theme() -> syntect::highlighting::Theme {
+    let mut nord_theme = std::io::Cursor::new(NORD_THEME.as_bytes());
+    match syntect::highlighting::ThemeSet::load_from_reader(&mut nord_theme) {
+        std::result::Result::Ok(theme) => theme,
+        std::result::Result::Err(_) => syntect::highlighting::Theme::default(),
+    }
+}
+
+pub fn get_syntax_set(ext: &str) -> syntect::parsing::SyntaxSet {
+    let syntax_set = match ext {
+        "asm" => {
+            let mut builder = syntect::parsing::SyntaxSetBuilder::new();
+
+            match syntect::parsing::syntax_definition::SyntaxDefinition::load_from_str(
+                ASSEMBLY_X86_64,
+                true,
+                None,
+            ) {
+                std::result::Result::Ok(a) => {
+                    builder.add(a);
+                }
+                std::result::Result::Err(_) => {
+                    error!("Failed to load syntaxes from asm");
+                }
+            };
+            builder.build()
+        }
+        _ => syntect::parsing::SyntaxSet::load_defaults_newlines(),
+    };
+    syntax_set
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -69,5 +103,19 @@ mod tests {
         assert_eq!(addr_to_u64("0x1234"), Some(0x1234_u64));
         assert_eq!(addr_to_u64("0x00001234"), Some(0x1234_u64));
         assert_eq!(addr_to_u64("1234"), None);
+    }
+
+    #[test]
+    fn test_theme() {
+        get_theme();
+    }
+
+    #[test]
+    fn test_syntax() {
+        let syntax_set = get_syntax_set("asm");
+        assert!(syntax_set.find_syntax_by_extension("asm").is_some());
+        let syntax_set = get_syntax_set("cpp");
+        assert!(syntax_set.find_syntax_by_extension("cpp").is_some());
+        assert!(syntax_set.find_syntax_by_extension("h").is_some());
     }
 }

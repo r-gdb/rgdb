@@ -1,13 +1,13 @@
 use super::action;
 use super::breakpoint::*;
 use crate::components::code;
+use crate::tool;
 use crate::tool::{FileData, HighlightFileData, TextFileData};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::Path;
 use std::rc::Rc;
 use syntect::easy::HighlightLines;
-use syntect::parsing::SyntaxSet;
 use tokio::fs::File;
 use tokio::io::AsyncBufReadExt;
 use tokio::sync::mpsc::UnboundedSender;
@@ -138,12 +138,12 @@ impl SrcFileData {
         lines: Vec<String>,
         send: UnboundedSender<action::Action>,
     ) {
-        let ps = SyntaxSet::load_defaults_newlines();
-        let ts = syntect::highlighting::ThemeSet::load_defaults();
+        let theme = tool::get_theme();
         let ext = Path::new(&file_name).extension().and_then(OsStr::to_str);
         if let Some(ext) = ext {
+            let ps = tool::get_syntax_set(ext);
             if let Some(syntax) = ps.find_syntax_by_extension(ext) {
-                let mut h = HighlightLines::new(syntax, &ts.themes["base16-mocha.dark"]);
+                let mut h = HighlightLines::new(syntax, &theme);
                 lines.iter().for_each(|s| match h.highlight_line(s, &ps) {
                     std::result::Result::Ok(ranges) => {
                         let e = ranges
