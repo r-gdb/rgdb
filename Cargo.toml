@@ -1,6 +1,6 @@
 [package]
 name = "rgdb"
-version = "0.1.1"
+version = "0.1.3"
 edition = "2021"
 description = "RGDB is a console frontend for GNU debugger"
 authors = ["shizhilvren"]
