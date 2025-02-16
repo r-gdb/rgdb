@@ -1,6 +1,7 @@
 use super::action;
 use super::breakpoint::*;
 use crate::components::code;
+use crate::mi::frame::Frame;
 use crate::tool;
 use crate::tool::{FileData, HighlightFileData, TextFileData};
 use std::collections::HashMap;
@@ -224,7 +225,7 @@ impl SrcFileData {
             .replace("\u{7f}", r##"\{DEL}"##)
     }
 
-    pub async fn read_file(file: String, send: UnboundedSender<action::Action>) {
+    pub async fn read_file(file: String, frame: Frame, send: UnboundedSender<action::Action>) {
         match File::open(&file).await {
             std::result::Result::Ok(f) => {
                 let mut f = tokio::io::BufReader::new(f);

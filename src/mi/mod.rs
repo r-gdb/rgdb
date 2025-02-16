@@ -1,5 +1,6 @@
 pub mod breakpointmi;
 pub mod disassemble;
+pub mod frame;
 pub mod token;
 use lalrpop_util::lalrpop_mod;
 lalrpop_mod!(

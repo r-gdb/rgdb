@@ -1,6 +1,7 @@
 use super::{gdbtty, Component};
 use crate::mi::breakpointmi::{show_bkpt, show_breakpoint_deleted, BreakPointAction};
 use crate::mi::disassemble::DisassembleFunction;
+use crate::mi::frame::Frame as FrameMi;
 use crate::mi::token::*;
 use crate::mi::{disassemble, miout};
 use crate::tool;
@@ -29,8 +30,8 @@ pub struct Gdbmi {
 pub enum Action {
     Start,
     Out(String),
-    ShowFile((String, u64)),
-    ShowAsm((String, String)),
+    ShowFile((String, u64, FrameMi)),
+    ShowAsm((String, String, FrameMi)),
     DisassembleAsm(String),
     ReadAsmFunc(DisassembleFunction),
     Breakpoint(BreakPointAction),
@@ -80,10 +81,12 @@ impl Gdbmi {
             out_line.into_iter().for_each(|line| {
                 match miout::TokOutputOnelineParser::new().parse(line.as_str()) {
                     std::result::Result::Ok(OutputOneline::OutOfBandRecord(a)) => {
-                        if let Some(show) = show_file(&a) {
-                            actions.push(Action::ShowFile(show));
-                        } else if let Some(show) = show_asm(&a) {
-                            actions.push(Action::ShowAsm(show));
+                        if let Some(frame) = get_frame(&a) {
+                            if let Some((file, line)) = show_file(&frame) {
+                                actions.push(Action::ShowFile((file, line, frame)));
+                            } else if let Some((func, addr)) = show_asm(&frame) {
+                                actions.push(Action::ShowAsm((func, addr, frame)));
+                            }
                         }
                         if let Some(bkpt) = show_bkpt(&a) {
                             actions.push(Action::Breakpoint(bkpt));
@@ -195,7 +198,7 @@ impl Component for Gdbmi {
             }
             action::Action::Gdbmi(Action::DisassembleAsm(addr)) => {
                 if let Some(write) = self.gdb_mi_writer.as_mut() {
-                    writeln!(write, "-data-disassemble -a {} -- 1", addr)?;
+                    writeln!(write, "-data-disassemble -a {} -- 0", addr)?;
                 }
                 Ok(None)
             }
@@ -207,105 +210,29 @@ impl Component for Gdbmi {
     }
 }
 
-fn show_asm(a: &OutOfBandRecordType) -> Option<(String, String)> {
-    let get_from_frame = |r: &ResultType| -> Option<(String, String)> {
-        let mut addr = None;
-        let mut func = None;
-        if r.variable.as_str() == "frame" {
-            if let ValueType::Tuple(Tuple::Results(rs)) = &r.value {
-                rs.iter().for_each(|r| match r.variable.as_str() {
-                    "addr" => {
-                        if let ValueType::Const(f) = &r.value {
-                            addr = Some(f.clone())
-                        }
-                    }
-                    "func" => {
-                        if let ValueType::Const(f) = &r.value {
-                            func = Some(f.clone())
-                        }
-                    }
-                    _ => {}
-                });
-            }
-        }
-        match (func, addr) {
-            (Some(func), Some(addr)) => Some((func, addr)),
-            _ => None,
-        }
-    };
-    let mut ret = None;
-    let OutOfBandRecordType::AsyncRecord(a) = a;
-    match a {
-        AsyncRecordType::ExecAsyncOutput(ExecAsyncOutputType {
-            async_output:
-                AsyncOutputType {
-                    async_class: AsyncClassType::Stopped,
-                    resaults,
-                    ..
-                },
-        }) => {
-            resaults.iter().for_each(|r| {
-                if let Some(a) = get_from_frame(r) {
-                    ret = Some(a);
-                }
-            });
-        }
-        AsyncRecordType::NotifyAsyncOutput(NotifyAsyncOutputType {
-            async_output:
-                AsyncOutputType {
-                    async_class: AsyncClassType::ThreadSelected,
-                    resaults,
-                    ..
-                },
-        }) => {
-            resaults.iter().for_each(|r| {
-                if let Some(a) = get_from_frame(r) {
-                    ret = Some(a);
-                }
-            });
-        }
-        _ => {}
+fn show_asm(frame: &FrameMi) -> Option<(String, String)> {
+    match (&frame.fullname, &frame.line, &frame.func) {
+        (_, _, Some(func)) => Some((func.clone(), frame.addr.clone())),
+        _ => None,
     }
-    ret
 }
 
-fn show_file(a: &OutOfBandRecordType) -> Option<(String, u64)> {
-    let get_from_frame = |r: &ResultType| -> Option<(String, u64)> {
-        let mut file = "".to_string();
-        let mut line = 0_u64;
-        if r.variable.as_str() == "frame" {
-            if let ValueType::Tuple(Tuple::Results(rs)) = &r.value {
-                rs.iter().for_each(|r| match r.variable.as_str() {
-                    "fullname" => {
-                        if let ValueType::Const(f) = &r.value {
-                            file = f.clone()
-                        }
-                    }
-                    "line" => {
-                        if let ValueType::Const(l) = &r.value {
-                            if let std::result::Result::Ok(l) = l.parse::<u64>() {
-                                line = l
-                            }
-                        }
-                    }
-                    _ => {}
-                });
-            }
-        }
-        if !file.is_empty() && line != 0 {
-            Some((file, line))
-        } else {
-            None
-        }
-    };
+fn show_file(frame: &FrameMi) -> Option<(String, u64)> {
+    match (&frame.fullname, &frame.line, &frame.func) {
+        (Some(file), Some(line), _) => Some((file.clone(), line.clone())),
+        _ => None,
+    }
+}
+
+fn get_frame(a: &OutOfBandRecordType) -> Option<FrameMi> {
     let mut ret = None;
     let OutOfBandRecordType::AsyncRecord(a) = a;
     match a {
         AsyncRecordType::ExecAsyncOutput(a) => {
             if a.async_output.async_class == AsyncClassType::Stopped {
                 a.async_output.resaults.iter().for_each(|r| {
-                    if let Some(a) = get_from_frame(r) {
-                        ret = Some(a);
+                    if let std::result::Result::Ok(f) = FrameMi::try_from(r) {
+                        ret = Some(f);
                     }
                 });
             }
@@ -313,19 +240,19 @@ fn show_file(a: &OutOfBandRecordType) -> Option<(String, u64)> {
         AsyncRecordType::NotifyAsyncOutput(a) => {
             if a.async_output.async_class == AsyncClassType::ThreadSelected {
                 a.async_output.resaults.iter().for_each(|r| {
-                    if let Some(a) = get_from_frame(r) {
-                        ret = Some(a);
+                    if let std::result::Result::Ok(f) = FrameMi::try_from(r) {
+                        ret = Some(f);
                     }
                 });
             }
         }
-    }
-
+    };
     ret
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::components::gdbmi::get_frame;
     use crate::components::gdbmi::show_asm;
     use crate::components::gdbmi::show_file;
     use crate::mi::miout;
@@ -334,7 +261,7 @@ mod tests {
         let a = miout::TokOutOfBandRecordParser::new()
             .parse(r##"*stopped,reason="end-stepping-range",frame={addr="0x00000000004006ff",func="main",args=[],file="a.c",fullname="/home/shizhilvren/c++/a.c",line="27"},thread-id="1",stopped-threads="all",core="6"
 "##);
-        let b = show_file(a.as_ref().unwrap());
+        let b = show_file(&get_frame(&a.as_ref().unwrap()).unwrap());
         println!("{:?} {:?}", &a, &b);
         assert!(b == Some(("/home/shizhilvren/c++/a.c".to_string(), 27_u64)));
     }
@@ -343,7 +270,8 @@ mod tests {
     fn f_show_file_2() {
         let a = miout::TokOutOfBandRecordParser::new()
             .parse("=thread-selected,id=\"1\",frame={level=\"1\",addr=\"0x000000000020198c\",func=\"main\",args=[],file=\"args.c\",fullname=\"/remote/x/x/code/c++/args.c\",line=\"7\",arch=\"i386:x86-64\"}\n");
-        let b = show_file(a.as_ref().unwrap());
+        let b = show_file(&get_frame(&a.as_ref().unwrap()).unwrap());
+
         println!("{:?} {:?}", &a, &b);
         assert!(b == Some(("/remote/x/x/code/c++/args.c".to_string(), 7_u64)));
     }
@@ -352,7 +280,7 @@ mod tests {
     fn f_show_asm() {
         let a = miout::TokOutOfBandRecordParser::new()
             .parse("*stopped,reason=\"breakpoint-hit\",disp=\"del\",bkptno=\"1\",frame={addr=\"0x0000555555581c20\",func=\"main\",args=[],arch=\"i386:x86-64\"},thread-id=\"1\",stopped-threads=\"all\",core=\"5\"\n");
-        let b = show_asm(a.as_ref().unwrap());
+        let b = show_asm(&get_frame(&a.as_ref().unwrap()).unwrap());
         println!("{:?} {:?}", &a, &b);
         assert!(b == Some(("main".to_string(), "0x0000555555581c20".to_string())));
     }

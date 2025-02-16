@@ -425,7 +425,7 @@ impl Component for Code {
             action::Action::Code(Action::Right(p)) => {
                 self.file_right(p);
             }
-            action::Action::Gdbmi(gdbmi::Action::ShowFile((file, line_id))) => {
+            action::Action::Gdbmi(gdbmi::Action::ShowFile((file, line_id, frame))) => {
                 self.file_need_show = FileNeedShow::SrcFile(FileNeedShowSrcFile {
                     name: file.clone(),
                     line: line_id,
@@ -435,7 +435,8 @@ impl Component for Code {
                         if let Some(send) = self.command_tx.clone() {
                             let file_data = SrcFileData::new(file.clone());
                             self.files_set.insert(file_data.get_key(), file_data);
-                            let read_therad = SrcFileData::read_file(file.clone(), send.clone());
+                            let read_therad =
+                                SrcFileData::read_file(file.clone(), frame.clone(), send.clone());
                             tokio::spawn(async {
                                 read_therad.await;
                             });
@@ -517,7 +518,7 @@ impl Component for Code {
                     });
                 self.set_vertical_to_stop_point(&func.func);
             }
-            action::Action::Gdbmi(gdbmi::Action::ShowAsm((func, addr))) => {
+            action::Action::Gdbmi(gdbmi::Action::ShowAsm((func, addr, _))) => {
                 self.file_need_show = FileNeedShow::AsmFile(FileNeedShowAsmFunc {
                     name: func.clone(),
                     addr: addr.clone(),
