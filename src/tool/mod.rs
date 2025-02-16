@@ -45,7 +45,16 @@ pub trait TextFileData {
     ) -> HashMap<u64, bool>;
 }
 
-pub trait HighlightFileData {
+pub trait StatusFileData: TextFileData {
+    fn get_status(&self) -> String {
+        self.get_file_name()
+    }
+}
+
+pub trait HighlightFileData
+where
+    Self: TextFileData,
+{
     fn get_highlight_done(&self) -> bool;
     fn set_highlight_done(&mut self);
     fn get_highlight_lines_range(
@@ -54,7 +63,10 @@ pub trait HighlightFileData {
         end: usize,
     ) -> (Vec<Vec<(ratatui::style::Color, String)>>, usize, usize);
 }
-pub trait FileData: TextFileData + HighlightFileData + HashSelf<std::string::String> {}
+pub trait FileData:
+    TextFileData + HighlightFileData + StatusFileData + HashSelf<std::string::String>
+{
+}
 
 pub fn addr_to_u64(value: &str) -> Option<u64> {
     match (value.starts_with("0x"), value.get(2..value.len())) {

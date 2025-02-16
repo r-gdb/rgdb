@@ -276,7 +276,7 @@ impl Code {
         frame.render_widget(paragraph_src, area_src);
     }
     fn draw_status(&self, frame: &mut Frame, file: &dyn FileData, area_status: Rect) {
-        let title = file.get_file_name();
+        let title = file.get_status();
         let scroll_x = title.len().saturating_sub(self.area.width as usize) as u16;
         let paragraph_status = Paragraph::new(title)
             .fg(Color::Black)

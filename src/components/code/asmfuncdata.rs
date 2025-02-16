@@ -261,4 +261,25 @@ impl AsmFuncData {
         self.addrs.sort();
     }
 }
+
+impl crate::tool::StatusFileData for AsmFuncData {
+    fn get_status(&self) -> String {
+        self.addrs
+            .first()
+            .and_then(|(start, _)| self.addrs.last().map(|(end, _)| (*start, *end)))
+            .map(|(start, end)| {
+                format!(
+                    "** Dump of assembler code for function {}: (0x{:x} - 0x{:x}) **",
+                    self.func_name, start, end
+                )
+            })
+            .unwrap_or_else(|| {
+                format!(
+                    "** Dump of assembler code for function {}: **",
+                    self.func_name
+                )
+            })
+    }
+}
+
 impl FileData for AsmFuncData {}

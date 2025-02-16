@@ -271,4 +271,6 @@ impl crate::tool::HashSelf<String> for SrcFileData {
     }
 }
 
+impl crate::tool::StatusFileData for SrcFileData {}
+
 impl FileData for SrcFileData {}
