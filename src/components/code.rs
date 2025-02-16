@@ -3,6 +3,7 @@ use crate::components::code::asmfuncdata::AsmFuncData;
 use crate::components::code::breakpoint::BreakPointData;
 use crate::components::code::srcfiledata::SrcFileData;
 use crate::components::gdbmi;
+use crate::mi::frame::Frame as FrameMi;
 use crate::tool;
 use crate::tool::{FileData, HashSelf, HighlightFileData, TextFileData};
 use crate::{action, config::Config};
@@ -10,6 +11,7 @@ use color_eyre::{eyre::Ok, Result};
 use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::rc::Rc;
 use strum::Display;
 use symbols::scrollbar;
@@ -28,6 +30,7 @@ pub struct Code {
     config: Config,
 
     files_set: HashMap<Rc<String>, SrcFileData>,
+    read_fail_files_set: HashSet<String>,
     asm_func_set: HashMap<Rc<String>, AsmFuncData>,
     breakpoint_set: HashMap<Rc<String>, BreakPointData>,
     file_need_show: FileNeedShow,
@@ -62,6 +65,7 @@ pub enum FileDataReal<'a> {
 pub enum Action {
     FileReadOneLine((String, String)),
     FileReadEnd(String),
+    FileReadFail((String, FrameMi)),
     AsmFileEnd,
     FilehighlightLine((String, Vec<(ratatui::style::Color, String)>)),
     FilehighlightEnd(String),
@@ -365,6 +369,49 @@ impl Code {
             }
         };
     }
+    fn show_file(&mut self, file: String, line_id: u64, frame: FrameMi) -> Option<action::Action> {
+        let mut ret = None;
+        match self.read_fail_files_set.contains(&file) {
+            true => match &frame.func {
+                Some(func) => {
+                    ret = Some(action::Action::Gdbmi(gdbmi::Action::ShowAsm((
+                        func.clone(),
+                        frame.addr.clone(),
+                        frame,
+                    ))));
+                }
+                _ => {}
+            },
+            false => {
+                self.file_need_show = FileNeedShow::SrcFile(FileNeedShowSrcFile {
+                    name: file.clone(),
+                    line: line_id,
+                });
+                match self.files_set.contains_key(&file) {
+                    false => {
+                        if let Some(send) = self.command_tx.clone() {
+                            let file_data = SrcFileData::new(file.clone());
+                            self.files_set.insert(file_data.get_key(), file_data);
+                            let read_therad =
+                                SrcFileData::read_file(file.clone(), frame.clone(), send.clone());
+                            tokio::spawn(async {
+                                read_therad.await;
+                            });
+                            debug!("read file {} start", file);
+                        } else {
+                            let msg = format!("read file {} thread not start", &file);
+                            error!("{}", &msg);
+                        }
+                    }
+                    true => {
+                        debug!("file {} has read", &file);
+                    }
+                }
+                self.set_vertical_to_stop_point(&file);
+            }
+        }
+        ret
+    }
 }
 
 impl Component for Code {
@@ -426,31 +473,7 @@ impl Component for Code {
                 self.file_right(p);
             }
             action::Action::Gdbmi(gdbmi::Action::ShowFile((file, line_id, frame))) => {
-                self.file_need_show = FileNeedShow::SrcFile(FileNeedShowSrcFile {
-                    name: file.clone(),
-                    line: line_id,
-                });
-                match self.files_set.contains_key(&file) {
-                    false => {
-                        if let Some(send) = self.command_tx.clone() {
-                            let file_data = SrcFileData::new(file.clone());
-                            self.files_set.insert(file_data.get_key(), file_data);
-                            let read_therad =
-                                SrcFileData::read_file(file.clone(), frame.clone(), send.clone());
-                            tokio::spawn(async {
-                                read_therad.await;
-                            });
-                            debug!("read file {} start", file);
-                        } else {
-                            let msg = format!("read file {} thread not start", &file);
-                            error!("{}", &msg);
-                        }
-                    }
-                    true => {
-                        debug!("file {} has read", &file);
-                    }
-                }
-                self.set_vertical_to_stop_point(&file);
+                ret = self.show_file(file, line_id, frame);
             }
             action::Action::Gdbmi(gdbmi::Action::Breakpoint(bkpt)) => {
                 let val = BreakPointData::from(&bkpt);
@@ -490,6 +513,21 @@ impl Component for Code {
                 }
                 self.set_vertical_to_stop_point(&file);
             }
+            action::Action::Code(Action::FileReadFail((file, frame))) => {
+                self.files_set.remove(&file);
+                self.read_fail_files_set.insert(file);
+                self.file_need_show = FileNeedShow::None;
+                match &frame.func {
+                    Some(func) => {
+                        ret = Some(action::Action::Gdbmi(gdbmi::Action::ShowAsm((
+                            func.clone(),
+                            frame.addr.clone(),
+                            frame,
+                        ))));
+                    }
+                    _ => {}
+                }
+            }
             action::Action::Code(Action::FilehighlightLine((file_name, line))) => {
                 self.files_set.entry(file_name.into()).and_modify(|file| {
                     file.add_highlight_line(line);
@@ -507,6 +545,7 @@ impl Component for Code {
                 }
             }
             action::Action::Gdbmi(gdbmi::Action::ReadAsmFunc(func)) => {
+                debug!("asm_func_set{:?}", &self.asm_func_set.keys());
                 self.asm_func_set
                     .entry(func.func.clone().into())
                     .and_modify(|asm| {

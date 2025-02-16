@@ -1,3 +1,4 @@
+use crate::action;
 use crate::components::code::breakpoint::BreakPointData;
 use color_eyre::{eyre::Ok, Result};
 use libc::ptsname;
@@ -6,6 +7,7 @@ use std::collections::HashMap;
 use std::ffi::CStr;
 use std::hash::Hash;
 use std::rc::Rc;
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::error;
 const NORD_THEME: &str = include_str!("../themes/Nord.tmTheme");
 const ASSEMBLY_X86_64: &str = include_str!("../syntaxes/assembly_x86_64.sublime-syntax");
@@ -105,6 +107,15 @@ pub fn get_syntax_set(ext: &str) -> syntect::parsing::SyntaxSet {
         _ => syntect::parsing::SyntaxSet::load_defaults_newlines(),
     };
     syntax_set
+}
+
+pub fn send_action(send: &UnboundedSender<action::Action>, action: action::Action) {
+    match send.send(action) {
+        std::result::Result::Ok(_) => {}
+        std::result::Result::Err(e) => {
+            error!("send error: {:?}", e);
+        }
+    }
 }
 #[cfg(test)]
 mod tests {

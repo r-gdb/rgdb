@@ -160,29 +160,22 @@ impl SrcFileData {
                                 )
                             })
                             .collect();
-                        match send.send(action::Action::Code(code::Action::FilehighlightLine((
-                            file_name.clone(),
-                            e,
-                        )))) {
-                            std::result::Result::Ok(_) => {}
-                            std::result::Result::Err(e) => {
-                                error!("send error: {:?}", e);
-                            }
-                        }
-                        // debug!("highlight {:?}", ranges);
+                        tool::send_action(
+                            &send,
+                            action::Action::Code(code::Action::FilehighlightLine((
+                                file_name.clone(),
+                                e,
+                            ))),
+                        );
                     }
                     std::result::Result::Err(e) => {
                         error!("file {} highlight fail {} {}", &file_name, &s, e);
                     }
                 });
-                match send.send(action::Action::Code(code::Action::FilehighlightEnd(
-                    file_name,
-                ))) {
-                    std::result::Result::Ok(_) => {}
-                    std::result::Result::Err(e) => {
-                        error!("send error: {:?}", e);
-                    }
-                }
+                tool::send_action(
+                    &send,
+                    action::Action::Code(code::Action::FilehighlightEnd(file_name)),
+                );
             } else {
                 error!("file {} not have extension", &ext);
             }
@@ -233,25 +226,21 @@ impl SrcFileData {
                     let mut line = String::new();
                     match f.read_line(&mut line).await {
                         std::result::Result::Ok(0) => {
-                            match send.send(action::Action::Code(code::Action::FileReadEnd(file))) {
-                                std::result::Result::Ok(_) => {}
-                                std::result::Result::Err(e) => {
-                                    error!("send error: {:?}", e);
-                                }
-                            }
+                            tool::send_action(
+                                &send,
+                                action::Action::Code(code::Action::FileReadEnd(file)),
+                            );
                             break;
                         }
                         std::result::Result::Ok(_n) => {
                             line = SrcFileData::read_file_filter(line);
-                            match send.send(action::Action::Code(code::Action::FileReadOneLine((
-                                file.clone(),
-                                line,
-                            )))) {
-                                std::result::Result::Ok(_) => {}
-                                std::result::Result::Err(e) => {
-                                    error!("send error: {:?}", e);
-                                }
-                            }
+                            tool::send_action(
+                                &send,
+                                action::Action::Code(code::Action::FileReadOneLine((
+                                    file.clone(),
+                                    line,
+                                ))),
+                            );
                         }
                         Err(e) => {
                             error!("file {} parse error: {:?}", &file, e);
@@ -261,6 +250,10 @@ impl SrcFileData {
             }
             Err(e) => {
                 error!("open file {} error: {:?}", &file, e);
+                tool::send_action(
+                    &send,
+                    action::Action::Code(code::Action::FileReadFail((file.clone(), frame))),
+                );
             }
         }
     }
