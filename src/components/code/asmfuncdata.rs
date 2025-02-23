@@ -7,8 +7,6 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use tracing::error;
 
-use super::breakpoint::BreakPointSignalData;
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AsmFuncData {
     pub func_name: Rc<String>,
@@ -63,20 +61,14 @@ impl TextFileData for AsmFuncData {
         breakpoints
             .iter()
             .flat_map(|bp| match bp {
-                BreakPointData::Signal(BreakPointSignalData::Asm(bp)) => {
+                BreakPointData::Signal(bp) => {
                     vec![(&bp.addr, bp.enabled)]
                 }
                 BreakPointData::Multiple(bpm) => bpm
                     .bps
                     .iter()
-                    .filter_map(|bp| match bp {
-                        BreakPointSignalData::Asm(bp) => {
-                            Some((&bp.addr, (bp.enabled && bpm.enabled)))
-                        }
-                        _ => None,
-                    })
+                    .map(|bp| (&bp.addr, (bp.enabled && bpm.enabled)))
                     .collect::<Vec<_>>(),
-                _ => vec![],
             })
             .filter_map(|(addr, enable)| {
                 let line = self.get_line_id(addr);

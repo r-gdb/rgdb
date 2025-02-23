@@ -3,7 +3,7 @@ mod tests {
     use crate::components::code::{AsmFuncData, BreakPointData, Code, SrcFileData};
     use crate::mi::breakpointmi::{
         BreakPointAction, BreakPointMultipleAction, BreakPointSignalAction,
-        BreakPointSignalActionAsm, BreakPointSignalActionSrc,
+        BreakPointSignalActionSrc,
     };
     use crate::mi::disassemble::{DisassembleFunction, DisassembleFunctionLine};
     use crate::tool::{HashSelf, StatusFileData, TextFileData};
@@ -141,18 +141,24 @@ mod tests {
             number: "5".to_string(),
             enabled: false,
             bps: vec![
-                BreakPointSignalAction::Src(BreakPointSignalActionSrc {
+                BreakPointSignalAction {
                     number: "5.1".to_string(),
                     enabled: true,
-                    line: 34_u64,
-                    fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-                }),
-                BreakPointSignalAction::Src(BreakPointSignalActionSrc {
-                    number: "5.1".to_string(),
+                    src: Some(BreakPointSignalActionSrc {
+                        line: 34_u64,
+                        fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+                    }),
+                    addr: "0x1234".to_string(),
+                },
+                BreakPointSignalAction {
+                    number: "5.2".to_string(),
                     enabled: false,
-                    line: 34_u64,
-                    fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-                }),
+                    src: Some(BreakPointSignalActionSrc {
+                        line: 34_u64,
+                        fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+                    }),
+                    addr: "0x1234".to_string(),
+                },
             ],
         });
         let a = BreakPointData::from(&a);
@@ -171,18 +177,24 @@ mod tests {
             number: "5".to_string(),
             enabled: true,
             bps: vec![
-                BreakPointSignalAction::Src(BreakPointSignalActionSrc {
+                BreakPointSignalAction {
                     number: "5.1".to_string(),
                     enabled: true,
-                    line: 34_u64,
-                    fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-                }),
-                BreakPointSignalAction::Src(BreakPointSignalActionSrc {
-                    number: "5.1".to_string(),
+                    src: Some(BreakPointSignalActionSrc {
+                        line: 34_u64,
+                        fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+                    }),
+                    addr: "0x1234".to_string(),
+                },
+                BreakPointSignalAction {
+                    number: "5.2".to_string(),
                     enabled: false,
-                    line: 34_u64,
-                    fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-                }),
+                    src: Some(BreakPointSignalActionSrc {
+                        line: 34_u64,
+                        fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+                    }),
+                    addr: "0x1234".to_string(),
+                },
             ],
         });
 
@@ -197,18 +209,24 @@ mod tests {
 
     #[test]
     fn f_breakpoint_range_3() {
-        let a = BreakPointAction::Signal(BreakPointSignalAction::Src(BreakPointSignalActionSrc {
+        let a = BreakPointAction::Signal(BreakPointSignalAction {
             number: "2".to_string(),
             enabled: true,
-            line: 34_u64,
-            fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-        }));
-        let b = BreakPointAction::Signal(BreakPointSignalAction::Src(BreakPointSignalActionSrc {
+            src: Some(BreakPointSignalActionSrc {
+                line: 34_u64,
+                fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+            }),
+            addr: "0x1234".to_string(),
+        });
+        let b = BreakPointAction::Signal(BreakPointSignalAction {
             number: "6".to_string(),
             enabled: true,
-            line: 37_u64,
-            fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-        }));
+            src: Some(BreakPointSignalActionSrc {
+                line: 37_u64,
+                fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+            }),
+            addr: "0x1234".to_string(),
+        });
         let a = BreakPointData::from(&a);
         let b = BreakPointData::from(&b);
         let mut code = Code::new();
@@ -224,16 +242,18 @@ mod tests {
             number: "5".to_string(),
             enabled: false,
             bps: vec![
-                BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
+                BreakPointSignalAction {
                     number: "5.1".to_string(),
                     enabled: true,
                     addr: "0x000001a".to_string(),
-                }),
-                BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
+                    src: None,
+                },
+                BreakPointSignalAction {
                     number: "5.1".to_string(),
                     enabled: false,
                     addr: "0x000001a".to_string(),
-                }),
+                    src: None,
+                },
             ],
         });
         let a = BreakPointData::from(&a);
@@ -274,16 +294,18 @@ mod tests {
             number: "5".to_string(),
             enabled: true,
             bps: vec![
-                BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
+                BreakPointSignalAction {
                     number: "5.1".to_string(),
                     enabled: true,
                     addr: "0x000001a".to_string(),
-                }),
-                BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
+                    src: None,
+                },
+                BreakPointSignalAction {
                     number: "5.1".to_string(),
                     enabled: false,
                     addr: "0x000001a".to_string(),
-                }),
+                    src: None,
+                },
             ],
         });
         let a = BreakPointData::from(&a);
@@ -318,16 +340,18 @@ mod tests {
 
     #[test]
     fn f_breakpoint_range_6() {
-        let a = BreakPointAction::Signal(BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
+        let a = BreakPointAction::Signal(BreakPointSignalAction {
             number: "2".to_string(),
             enabled: true,
             addr: "0x000001a".to_string(),
-        }));
-        let b = BreakPointAction::Signal(BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
+            src: None,
+        });
+        let b = BreakPointAction::Signal(BreakPointSignalAction {
             number: "10".to_string(),
             enabled: false,
             addr: "0x000003b".to_string(),
-        }));
+            src: None,
+        });
 
         let a = BreakPointData::from(&a);
         let b = BreakPointData::from(&b);

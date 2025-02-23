@@ -1,6 +1,13 @@
 // use bytes;
 use crate::mi::token::*;
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BreakPointAction {
+    Signal(BreakPointSignalAction),
+    Multiple(BreakPointMultipleAction),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BreakPointMultipleAction {
     pub number: String,
@@ -9,29 +16,16 @@ pub struct BreakPointMultipleAction {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BreakPointSignalAction {
-    Src(BreakPointSignalActionSrc),
-    Asm(BreakPointSignalActionAsm),
+pub struct BreakPointSignalAction {
+    pub number: String,
+    pub enabled: bool,
+    pub src: Option<BreakPointSignalActionSrc>,
+    pub addr: String,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BreakPointSignalActionSrc {
-    pub number: String,
-    pub enabled: bool,
     pub fullname: String,
     pub line: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct BreakPointSignalActionAsm {
-    pub number: String,
-    pub enabled: bool,
-    pub addr: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum BreakPointAction {
-    Signal(BreakPointSignalAction),
-    Multiple(BreakPointMultipleAction),
 }
 
 pub fn show_breakpoint_deleted(a: &OutOfBandRecordType) -> Option<u64> {
@@ -104,21 +98,23 @@ fn get_from_signal_point(v: &ValueType) -> Option<BreakPointSignalAction> {
         });
     }
     match (addr, file, line, number, enabled) {
-        (_, Some(file), Some(line), Some(number), Some(enabled)) => {
-            Some(BreakPointSignalAction::Src(BreakPointSignalActionSrc {
+        (Some(addr), Some(file), Some(line), Some(number), Some(enabled)) => {
+            Some(BreakPointSignalAction {
                 number: number.clone(),
                 enabled,
-                fullname: file,
-                line,
-            }))
-        }
-        (Some(addr), _, _, Some(number), Some(enabled)) => {
-            Some(BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
-                number: number.clone(),
-                enabled,
+                src: Some(BreakPointSignalActionSrc {
+                    fullname: file,
+                    line,
+                }),
                 addr,
-            }))
+            })
         }
+        (Some(addr), _, _, Some(number), Some(enabled)) => Some(BreakPointSignalAction {
+            number: number.clone(),
+            enabled,
+            addr,
+            src: None,
+        }),
         _ => None,
     }
 }
@@ -185,21 +181,26 @@ fn get_from_bkpt(r: &ResultType) -> Option<BreakPointAction> {
         }
     }
     match (addr, file, line, number, enabled, multiple) {
-        (_, Some(file), Some(line), Some(number), Some(enabled), false) => Some(
-            BreakPointAction::Signal(BreakPointSignalAction::Src(BreakPointSignalActionSrc {
+        (Some(addr), Some(file), Some(line), Some(number), Some(enabled), false) => {
+            Some(BreakPointAction::Signal(BreakPointSignalAction {
                 number: number.clone(),
                 enabled,
-                fullname: file,
-                line,
-            })),
-        ),
-        (Some(addr), _, _, Some(number), Some(enabled), false) => Some(BreakPointAction::Signal(
-            BreakPointSignalAction::Asm(BreakPointSignalActionAsm {
+                src: Some(BreakPointSignalActionSrc {
+                    fullname: file,
+                    line,
+                }),
+                addr,
+            }))
+        }
+
+        (Some(addr), _, _, Some(number), Some(enabled), false) => {
+            Some(BreakPointAction::Signal(BreakPointSignalAction {
                 number: number.clone(),
                 enabled,
                 addr,
-            }),
-        )),
+                src: None,
+            }))
+        }
         (_, None, None, Some(number), Some(enabled), true) => {
             Some(BreakPointAction::Multiple(BreakPointMultipleAction {
                 number: number.clone(),
@@ -360,14 +361,15 @@ mod tests {
         let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-created,bkpt={number=\"1\",type=\"breakpoint\",disp=\"del\",enabled=\"y\",addr=\"0x0000000000404570\",func=\"main\",file=\"tmux.c\",fullname=\"/home/shizhilvren/tmux/tmux.c\",line=\"355\",thread-groups=[\"i1\"],times=\"0\",original-location=\"main\"}\n" );
         let bkpt = show_bkpt(&a.unwrap());
         assert!(
-            bkpt == Some(BreakPointAction::Signal(BreakPointSignalAction::Src(
-                BreakPointSignalActionSrc {
-                    number: "1".to_string(),
-                    enabled: true,
+            bkpt == Some(BreakPointAction::Signal(BreakPointSignalAction {
+                number: "1".to_string(),
+                enabled: true,
+                src: Some(BreakPointSignalActionSrc {
                     fullname: "/home/shizhilvren/tmux/tmux.c".to_string(),
                     line: 355_u64,
-                }
-            )))
+                }),
+                addr: "0x0000000000404570".to_string(),
+            }))
         );
     }
 
@@ -376,14 +378,15 @@ mod tests {
         let a = miout::TokOutOfBandRecordParser::new().parse("=breakpoint-modified,bkpt={number=\"2\",type=\"breakpoint\",disp=\"keep\",enabled=\"n\",addr=\"0x0000000000404570\",func=\"main\",file=\"tmux.c\",fullname=\"/home/shizhilvren/tmux/tmux.c\",line=\"355\",thread-groups=[\"i1\"],cond=\"1==2\",times=\"0\",original-location=\"main\"}\n"  );
         let bkpt = show_bkpt(&a.unwrap());
         assert!(
-            bkpt == Some(BreakPointAction::Signal(BreakPointSignalAction::Src(
-                BreakPointSignalActionSrc {
-                    number: "2".to_string(),
-                    enabled: false,
+            bkpt == Some(BreakPointAction::Signal(BreakPointSignalAction {
+                number: "2".to_string(),
+                enabled: false,
+                src: Some(BreakPointSignalActionSrc {
                     fullname: "/home/shizhilvren/tmux/tmux.c".to_string(),
                     line: 355_u64,
-                }
-            )))
+                }),
+                addr: "0x0000000000404570".to_string(),
+            }))
         );
     }
 
@@ -407,18 +410,24 @@ mod tests {
                 number: "5".to_string(),
                 enabled: false,
                 bps: vec![
-                    BreakPointSignalAction::Src(BreakPointSignalActionSrc {
+                    BreakPointSignalAction {
                         number: "5.1".to_string(),
                         enabled: true,
-                        line: 34_u64,
-                        fullname: "/home/shizhilvren/tmux/environ.c".to_string()
-                    }),
-                    BreakPointSignalAction::Src(BreakPointSignalActionSrc {
+                        src: Some(BreakPointSignalActionSrc {
+                            line: 34_u64,
+                            fullname: "/home/shizhilvren/tmux/environ.c".to_string()
+                        }),
+                        addr: "0x0000000000426d70".to_string(),
+                    },
+                    BreakPointSignalAction {
                         number: "5.2".to_string(),
                         enabled: false,
-                        line: 34_u64,
-                        fullname: "/home/shizhilvren/tmux/environ.c".to_string()
-                    }),
+                        src: Some(BreakPointSignalActionSrc {
+                            line: 34_u64,
+                            fullname: "/home/shizhilvren/tmux/environ.c".to_string()
+                        }),
+                        addr: "0x0000000000427c61".to_string()
+                    },
                 ]
             }))
         );
@@ -439,18 +448,24 @@ mod tests {
                 number: "2".to_string(),
                 enabled: false,
                 bps: vec![
-                    BreakPointSignalAction::Src(BreakPointSignalActionSrc {
+                    BreakPointSignalAction {
                         number: "2.1".to_string(),
                         enabled: true,
-                        line: 34_u64,
-                        fullname: "/home/shizhilvren/tmux/environ.c".to_string()
-                    }),
-                    BreakPointSignalAction::Src(BreakPointSignalActionSrc {
+                        src: Some(BreakPointSignalActionSrc {
+                            line: 34_u64,
+                            fullname: "/home/shizhilvren/tmux/environ.c".to_string()
+                        }),
+                        addr: "0x0000000000426d70".to_string(),
+                    },
+                    BreakPointSignalAction {
                         number: "2.8".to_string(),
                         enabled: false,
-                        line: 34_u64,
-                        fullname: "/home/shizhilvren/tmux/environ.c".to_string()
-                    }),
+                        src: Some(BreakPointSignalActionSrc {
+                            line: 34_u64,
+                            fullname: "/home/shizhilvren/tmux/environ.c".to_string()
+                        }),
+                        addr: "0x0000000000427c61".to_string(),
+                    },
                 ]
             }))
         );
@@ -462,26 +477,35 @@ mod tests {
             number: "5".to_string(),
             enabled: false,
             bps: vec![
-                BreakPointSignalAction::Src(BreakPointSignalActionSrc {
+                BreakPointSignalAction {
                     number: "5.1".to_string(),
                     enabled: true,
-                    line: 34_u64,
-                    fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-                }),
-                BreakPointSignalAction::Src(BreakPointSignalActionSrc {
-                    number: "5.1".to_string(),
+                    src: Some(BreakPointSignalActionSrc {
+                        line: 34_u64,
+                        fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+                    }),
+                    addr: "0x1234".to_string(),
+                },
+                BreakPointSignalAction {
+                    number: "5.2".to_string(),
                     enabled: false,
-                    line: 34_u64,
-                    fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-                }),
+                    src: Some(BreakPointSignalActionSrc {
+                        line: 34_u64,
+                        fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+                    }),
+                    addr: "0x1234".to_string(),
+                },
             ],
         });
-        let b = BreakPointAction::Signal(BreakPointSignalAction::Src(BreakPointSignalActionSrc {
+        let b = BreakPointAction::Signal(BreakPointSignalAction {
             number: "5".to_string(),
             enabled: true,
-            line: 34_u64,
-            fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
-        }));
+            src: Some(BreakPointSignalActionSrc {
+                line: 34_u64,
+                fullname: "/home/shizhilvren/tmux/environ.c".to_string(),
+            }),
+            addr: "0x1234".to_string(),
+        });
         assert!(a != b);
     }
 }

@@ -1,8 +1,13 @@
 use crate::mi::breakpointmi::{
-    BreakPointAction, BreakPointMultipleAction, BreakPointSignalAction, BreakPointSignalActionAsm,
-    BreakPointSignalActionSrc,
+    BreakPointAction, BreakPointMultipleAction, BreakPointSignalAction, BreakPointSignalActionSrc,
 };
 use std::rc::Rc;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BreakPointData {
+    Signal(BreakPointSignalData),
+    Multiple(BreakPointMultipleData),
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BreakPointMultipleData {
@@ -12,58 +17,43 @@ pub struct BreakPointMultipleData {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BreakPointSignalData {
-    Src(BreakPointSignalSrcData),
-    Asm(BreakPointSignalAsmData),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BreakPointSignalSrcData {
+pub struct BreakPointSignalData {
     pub number: Rc<String>,
     pub enabled: bool,
-    pub fullname: String,
-    pub line: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BreakPointSignalAsmData {
-    pub number: Rc<String>,
-    pub enabled: bool,
+    pub src: Option<BreakPointSignalSrcData>,
     pub addr: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BreakPointData {
-    Signal(BreakPointSignalData),
-    Multiple(BreakPointMultipleData),
+pub struct BreakPointSignalSrcData {
+    pub fullname: String,
+    pub line: u64,
 }
 
 impl From<&BreakPointSignalAction> for BreakPointSignalData {
     fn from(a: &BreakPointSignalAction) -> Self {
-        match a {
-            BreakPointSignalAction::Src(p) => Self::Src(BreakPointSignalSrcData::from(p)),
-            BreakPointSignalAction::Asm(p) => Self::Asm(BreakPointSignalAsmData::from(p)),
-        }
+        a.src.as_ref().map_or(
+            BreakPointSignalData {
+                number: Rc::new(a.number.clone()),
+                enabled: a.enabled,
+                src: None,
+                addr: a.addr.clone(),
+            },
+            |src| BreakPointSignalData {
+                number: Rc::new(a.number.clone()),
+                enabled: a.enabled,
+                src: Some(BreakPointSignalSrcData::from(src)),
+                addr: a.addr.clone(),
+            },
+        )
     }
 }
 
 impl From<&BreakPointSignalActionSrc> for BreakPointSignalSrcData {
     fn from(a: &BreakPointSignalActionSrc) -> Self {
         Self {
-            number: Rc::new(a.number.clone()),
-            enabled: a.enabled,
             fullname: a.fullname.clone(),
             line: a.line,
-        }
-    }
-}
-
-impl From<&BreakPointSignalActionAsm> for BreakPointSignalAsmData {
-    fn from(a: &BreakPointSignalActionAsm) -> Self {
-        Self {
-            number: Rc::new(a.number.clone()),
-            enabled: a.enabled,
-            addr: a.addr.clone(),
         }
     }
 }
@@ -103,21 +93,6 @@ impl crate::tool::HashSelf<String> for BreakPointMultipleData {
 }
 
 impl crate::tool::HashSelf<String> for BreakPointSignalData {
-    fn get_key(&self) -> Rc<String> {
-        match self {
-            Self::Src(p) => p.get_key(),
-            Self::Asm(p) => p.get_key(),
-        }
-    }
-}
-
-impl crate::tool::HashSelf<String> for BreakPointSignalAsmData {
-    fn get_key(&self) -> Rc<String> {
-        self.number.clone()
-    }
-}
-
-impl crate::tool::HashSelf<String> for BreakPointSignalSrcData {
     fn get_key(&self) -> Rc<String> {
         self.number.clone()
     }
