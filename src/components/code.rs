@@ -196,8 +196,8 @@ impl Code {
             None
         };
         self.draw_src(frame, file, start_line, end_line, area_src);
-        self.draw_breakpoint(frame, file, start_line, end_line, area_ids);
         self.draw_id(frame, start_line, end_line, line_id, area_ids);
+        self.draw_breakpoint(frame, file, start_line, end_line, area_ids);
         self.draw_split(frame, area_split);
         self.draw_currect_pointer(
             frame,
