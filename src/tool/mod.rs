@@ -18,7 +18,7 @@ pub fn get_pty_name(fd: i32) -> Result<String> {
     Ok(c_str.to_string())
 }
 
-pub fn get_layout(area: Rect) -> [Rect; 4] {
+fn get_layout(area: Rect) -> [Rect; 4] {
     Layout::vertical([
         Constraint::Percentage(50),
         Constraint::Length(1),
@@ -26,6 +26,27 @@ pub fn get_layout(area: Rect) -> [Rect; 4] {
         Constraint::Length(1),
     ])
     .areas(area)
+}
+
+pub struct Layouts {
+    pub src: Rect,
+    pub src_status: Rect,
+    pub gdb: Rect,
+    pub status: Rect,
+    pub split: Option<Rect>,
+}
+
+impl From<Rect> for Layouts {
+    fn from(area: Rect) -> Self {
+        let [src, src_status, gdb, status] = get_layout(area);
+        Layouts {
+            src,
+            src_status,
+            gdb,
+            status,
+            split: None,
+        }
+    }
 }
 
 pub trait HashSelf<T: Hash> {

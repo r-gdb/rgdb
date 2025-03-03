@@ -36,7 +36,11 @@ impl StartPage {
 
     fn draw_all(&mut self, frame: &mut Frame, area: Rect) {
         if self.is_start() {
-            let [area, area_status, _, _] = tool::get_layout(area);
+            let tool::Layouts {
+                src: area,
+                src_status: area_status,
+                ..
+            } = tool::Layouts::from(area);
             let half = area.height.saturating_sub(12).div_euclid(2);
             let [_, area, area_version] = Layout::vertical([
                 Constraint::Max(half),

@@ -64,7 +64,7 @@ impl StatusBar {
 
     fn draw_all(&mut self, frame: &mut Frame, area: Rect) {
         if self.is_show() {
-            let [_, _, _, area] = tool::get_layout(area);
+            let tool::Layouts { status: area, .. } = area.into();
             self.draw_status(frame, area);
         }
     }

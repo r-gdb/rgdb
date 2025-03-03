@@ -233,7 +233,7 @@ impl Component for Gdbtty {
     }
 
     fn draw(&mut self, _frame: &mut Frame, area: Rect) -> Result<()> {
-        let [_, _, area, _] = tool::get_layout(area);
+        let tool::Layouts { gdb: area, .. } = area.into();
         let area = area.inner(Margin {
             horizontal: 1,
             vertical: 1,

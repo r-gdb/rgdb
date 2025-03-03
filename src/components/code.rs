@@ -135,8 +135,7 @@ impl Code {
     }
     fn set_area(&mut self, area: &layout::Size) {
         let area = Rect::new(0, 0, area.width, area.height);
-        let [area, _, _, _] = tool::get_layout(area);
-        self.area = area;
+        tool::Layouts { src: self.area, .. } = area.into();
     }
     fn file_down(&mut self, n: usize) {
         self.vertical_scroll = self.vertical_scroll.saturating_add(n);
@@ -584,7 +583,11 @@ impl Component for Code {
         let ans = self.get_file_need_show().map(|(file, _line_id)| {
             let n = file.get_lines_len();
             let num_len = n.to_string().len() as u16;
-            let [area, area_status, _, _] = tool::get_layout(area);
+            let tool::Layouts {
+                src: area,
+                src_status: area_status,
+                ..
+            } = area.into();
             let [area_ids, area_split, area_src] = Layout::horizontal([
                 Constraint::Min(num_len),
                 Constraint::Min(2),
@@ -597,7 +600,6 @@ impl Component for Code {
         ans.map(|(n, _, _, area_src, _)| (area_src.height, n))
             .map(|(height, n)| {
                 self.legalization_vertical_scroll_range(height as usize, n);
-                Some(())
             });
 
         self.get_file_need_show()
@@ -614,7 +616,6 @@ impl Component for Code {
             })
             .map(|(width, text_len)| {
                 self.legalization_horizontial_scroll_range(width as usize, text_len);
-                Some(())
             });
 
         let ans = if let (
