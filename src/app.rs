@@ -86,7 +86,9 @@ impl App {
         let mut tui = Tui::new()?
             // .mouse(true) // uncomment this line to enable mouse support
             .tick_rate(self.tick_rate)
-            .frame_rate(self.frame_rate);
+            .frame_rate(self.frame_rate)
+            .focus(true)
+            .mouse(true);
         tui.enter()?;
 
         for component in self.components.iter_mut() {

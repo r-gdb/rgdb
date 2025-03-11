@@ -27,6 +27,7 @@ pub struct Home {
     area_change_time: Option<Instant>,
     mode: Mode,
     is_horizontal: bool,
+    focus: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
@@ -49,6 +50,7 @@ impl Home {
             area_change_time: None,
             mode: s.mode,
             is_horizontal: s.is_horizontal,
+            focus: true,
         }
     }
     pub fn set_mode(&mut self, mode: Mode) {
@@ -98,9 +100,15 @@ impl Home {
     fn draw_cmd(&mut self, frame: &mut Frame, area: Rect) {
         self.vt100_parser.set_scrollback(self.vertical_scroll);
         let screen = self.vt100_parser.screen();
-        let cursor_show = self.vertical_scroll == 0 && self.mode == Mode::Gdb;
+        let cursor_show = self.vertical_scroll == 0 && self.mode == Mode::Gdb && self.focus;
+        let cursor_style = Style::default().fg(Color::Rgb(255, 204, 0));
         let pseudo_term = PseudoTerminal::new(screen)
-            .cursor(tui_term::widget::Cursor::default().visibility(cursor_show))
+            .cursor(
+                tui_term::widget::Cursor::default()
+                    .style(cursor_style)
+                    .overlay_style(cursor_style.add_modifier(Modifier::REVERSED))
+                    .visibility(cursor_show),
+            )
             .style(
                 Style::default()
                     .fg(Color::White)
@@ -140,6 +148,27 @@ impl Component for Home {
     fn register_action_handler(&mut self, tx: UnboundedSender<action::Action>) -> Result<()> {
         self.command_tx = Some(tx);
         Ok(())
+    }
+    fn handle_events(
+        &mut self,
+        event: Option<crate::tui::Event>,
+    ) -> Result<Option<crate::action::Action>> {
+        use crate::tui::Event;
+        debug!("event {:?}", &event);
+        let action = match event {
+            Some(Event::Key(key_event)) => self.handle_key_event(key_event)?,
+            Some(Event::Mouse(mouse_event)) => self.handle_mouse_event(mouse_event)?,
+            Some(Event::FocusLost) => {
+                self.focus = false;
+                None
+            }
+            Some(Event::FocusGained) => {
+                self.focus = true;
+                None
+            }
+            _ => None,
+        };
+        Ok(action)
     }
 
     fn register_config_handler(&mut self, config: Config) -> Result<()> {

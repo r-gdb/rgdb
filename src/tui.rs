@@ -10,8 +10,7 @@ use color_eyre::Result;
 use crossterm::{
     cursor,
     event::{
-        DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
-        Event as CrosstermEvent, EventStream, KeyEvent, KeyEventKind, MouseEvent,
+        DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste, EnableFocusChange, EnableMouseCapture, Event as CrosstermEvent, EventStream, KeyEvent, KeyEventKind, MouseEvent
     },
     terminal::{EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -52,6 +51,7 @@ pub struct Tui {
     pub tick_rate: f64,
     pub mouse: bool,
     pub paste: bool,
+    pub focus: bool,
 }
 
 impl Tui {
@@ -65,8 +65,9 @@ impl Tui {
             event_tx,
             frame_rate: 60.0,
             tick_rate: 4.0,
-            mouse: true,
+            mouse: false,
             paste: false,
+            focus: false,
         })
     }
 
@@ -87,6 +88,10 @@ impl Tui {
 
     pub fn paste(mut self, paste: bool) -> Self {
         self.paste = paste;
+        self
+    }
+    pub fn focus(mut self, focus: bool) -> Self {
+        self.focus = focus;
         self
     }
 
@@ -175,6 +180,11 @@ impl Tui {
         }
         if self.paste {
             crossterm::execute!(stdout(), EnableBracketedPaste)?;
+        }
+        if self.focus{
+            crossterm::execute!(stdout(), EnableFocusChange)?;
+        } else{
+            crossterm::execute!(stdout(), DisableFocusChange)?;
         }
         self.start();
         Ok(())
