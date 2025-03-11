@@ -10,7 +10,9 @@ use color_eyre::Result;
 use crossterm::{
     cursor,
     event::{
-        DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste, EnableFocusChange, EnableMouseCapture, Event as CrosstermEvent, EventStream, KeyEvent, KeyEventKind, MouseEvent
+        DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
+        EnableFocusChange, EnableMouseCapture, Event as CrosstermEvent, EventStream, KeyEvent,
+        KeyEventKind, MouseEvent,
     },
     terminal::{EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -23,7 +25,7 @@ use tokio::{
     time::interval,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::error;
+use tracing::{debug, error};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum Event {
@@ -134,7 +136,7 @@ impl Tui {
                     Some(Ok(event)) => match event {
                         CrosstermEvent::Key(key) if key.kind == KeyEventKind::Press => Event::Key(key),
                         CrosstermEvent::Mouse(mouse) => {
-                            // debug!("event {:?}", &mouse);
+                            // debug!("mouse event {:?}", &mouse);
                             Event::Mouse(mouse)
                         },
                         CrosstermEvent::Resize(x, y) => Event::Resize(x, y),
@@ -181,9 +183,9 @@ impl Tui {
         if self.paste {
             crossterm::execute!(stdout(), EnableBracketedPaste)?;
         }
-        if self.focus{
+        if self.focus {
             crossterm::execute!(stdout(), EnableFocusChange)?;
-        } else{
+        } else {
             crossterm::execute!(stdout(), DisableFocusChange)?;
         }
         self.start();

@@ -154,7 +154,7 @@ impl Component for Home {
         event: Option<crate::tui::Event>,
     ) -> Result<Option<crate::action::Action>> {
         use crate::tui::Event;
-        debug!("event {:?}", &event);
+        // debug!("event {:?}", &event);
         let action = match event {
             Some(Event::Key(key_event)) => self.handle_key_event(key_event)?,
             Some(Event::Mouse(mouse_event)) => self.handle_mouse_event(mouse_event)?,
