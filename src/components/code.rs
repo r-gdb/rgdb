@@ -37,6 +37,7 @@ pub struct Code {
     vertical_scroll: usize,
     horizontial_scroll: usize,
     area: Rect,
+    is_horizontal: bool,
 }
 
 #[derive(Default)]
@@ -135,7 +136,7 @@ impl Code {
     }
     fn set_area(&mut self, area: &layout::Size) {
         let area = Rect::new(0, 0, area.width, area.height);
-        tool::Layouts { src: self.area, .. } = area.into();
+        tool::Layouts { src: self.area, .. } = (area, self.is_horizontal).into();
     }
     fn file_down(&mut self, n: usize) {
         self.vertical_scroll = self.vertical_scroll.saturating_add(n);
@@ -471,6 +472,9 @@ impl Component for Code {
             action::Action::Code(Action::Right(p)) => {
                 self.file_right(p);
             }
+            action::Action::SwapHV => {
+                self.is_horizontal = !self.is_horizontal;
+            }
             action::Action::Gdbmi(gdbmi::Action::ShowFile((file, line_id, frame))) => {
                 ret = self.show_file(file, line_id, frame);
             }
@@ -587,7 +591,7 @@ impl Component for Code {
                 src: area,
                 src_status: area_status,
                 ..
-            } = area.into();
+            } = (area, self.is_horizontal).into();
             let [area_ids, area_split, area_src] = Layout::horizontal([
                 Constraint::Min(num_len),
                 Constraint::Min(2),

@@ -26,6 +26,7 @@ pub struct Home {
     area: Rect,
     area_change_time: Option<Instant>,
     mode: Mode,
+    is_horizontal: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
@@ -47,6 +48,7 @@ impl Home {
             vt100_parser_buffer: s.vt100_parser_buffer,
             area_change_time: None,
             mode: s.mode,
+            is_horizontal: s.is_horizontal,
         }
     }
     pub fn set_mode(&mut self, mode: Mode) {
@@ -69,11 +71,11 @@ impl Home {
     }
     fn set_area(&mut self, area: &layout::Size) {
         let area = Rect::new(0, 0, area.width, area.height);
-        tool::Layouts { gdb: self.area, .. } = area.into();
+        tool::Layouts { gdb: self.area, .. } = (area, self.is_horizontal).into();
     }
     fn set_vt100_area(&mut self, area: &layout::Size) {
         let area = Rect::new(0, 0, area.width, area.height);
-        let tool::Layouts { gdb: area, .. } = area.into();
+        let tool::Layouts { gdb: area, .. } = (area, self.is_horizontal).into();
         let in_size = area
             .inner(Margin {
                 vertical: 0,
@@ -189,7 +191,9 @@ impl Component for Home {
                 self.vt100_parser.process(out.as_slice());
                 self.vt100_parser.set_scrollback(0);
                 self.vertical_scroll = 0;
-                return Ok(None);
+            }
+            action::Action::SwapHV => {
+                self.is_horizontal = !self.is_horizontal;
             }
             _ => {}
         }
@@ -209,7 +213,7 @@ impl Component for Home {
                 }
             }
         }
-        let tool::Layouts { gdb: area, .. } = area.into();
+        let tool::Layouts { gdb: area, .. } = (area, self.is_horizontal).into();
         let n = self.get_text_hight(&area);
         self.set_scroll_bar_status(n);
         self.draw_cmd(frame, area);

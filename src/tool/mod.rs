@@ -18,7 +18,7 @@ pub fn get_pty_name(fd: i32) -> Result<String> {
     Ok(c_str.to_string())
 }
 
-fn get_layout(area: Rect) -> [Rect; 4] {
+fn get_layout_vertical(area: Rect) -> [Rect; 4] {
     Layout::vertical([
         Constraint::Percentage(50),
         Constraint::Length(1),
@@ -27,24 +27,44 @@ fn get_layout(area: Rect) -> [Rect; 4] {
     ])
     .areas(area)
 }
+fn get_layout_horizontal(area: Rect) -> [Rect; 4] {
+    let [src, gdb] =
+        Layout::horizontal([Constraint::Percentage(50), Constraint::Fill(1)]).areas(area);
+    let [src, src_status] =
+        Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(src);
+    let [gdb, status] = Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(gdb);
+    [src, src_status, gdb, status]
+}
 
 pub struct Layouts {
     pub src: Rect,
     pub src_status: Rect,
     pub gdb: Rect,
     pub status: Rect,
-    pub split: Option<Rect>,
 }
 
-impl From<Rect> for Layouts {
-    fn from(area: Rect) -> Self {
-        let [src, src_status, gdb, status] = get_layout(area);
-        Layouts {
-            src,
-            src_status,
-            gdb,
-            status,
-            split: None,
+impl From<(ratatui::layout::Rect, bool)> for Layouts {
+    fn from(area: (ratatui::layout::Rect, bool)) -> Self {
+        let (area, is_horizontal) = area;
+        match is_horizontal {
+            false => {
+                let [src, src_status, gdb, status] = get_layout_vertical(area);
+                Layouts {
+                    src,
+                    src_status,
+                    gdb,
+                    status,
+                }
+            }
+            true => {
+                let [src, src_status, gdb, status] = get_layout_horizontal(area);
+                Layouts {
+                    src,
+                    src_status,
+                    gdb,
+                    status,
+                }
+            }
         }
     }
 }

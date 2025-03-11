@@ -15,6 +15,7 @@ use tui_widgets::big_text::{BigText, PixelSize};
 #[derive(Debug, Clone, PartialEq)]
 pub struct StartPage {
     is_start: bool,
+    is_horizontal: bool,
 }
 
 impl Default for StartPage {
@@ -25,7 +26,10 @@ impl Default for StartPage {
 
 impl StartPage {
     pub fn new() -> Self {
-        Self { is_start: true }
+        Self {
+            is_start: true,
+            is_horizontal: false,
+        }
     }
     fn is_start(&self) -> bool {
         self.is_start
@@ -40,7 +44,7 @@ impl StartPage {
                 src: area,
                 src_status: area_status,
                 ..
-            } = tool::Layouts::from(area);
+            } = tool::Layouts::from((area, self.is_horizontal));
             let half = area.height.saturating_sub(12).div_euclid(2);
             let [_, area, area_version] = Layout::vertical([
                 Constraint::Max(half),
@@ -89,6 +93,9 @@ impl Component for StartPage {
                 action::Action::Code(code::Action::FileReadEnd(_))
                 | action::Action::Code(code::Action::AsmFileEnd) => {
                     self.set_is_start(false);
+                }
+                action::Action::SwapHV => {
+                    self.is_horizontal = !self.is_horizontal;
                 }
                 _ => {}
             };

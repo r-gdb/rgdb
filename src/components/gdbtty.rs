@@ -25,6 +25,7 @@ pub struct Gdbtty {
     gdb_path: String,
     gdb_args: Vec<String>,
     handle_key: bool,
+    is_horizontal: bool,
 }
 
 impl Gdbtty {
@@ -233,7 +234,7 @@ impl Component for Gdbtty {
     }
 
     fn draw(&mut self, _frame: &mut Frame, area: Rect) -> Result<()> {
-        let tool::Layouts { gdb: area, .. } = area.into();
+        let tool::Layouts { gdb: area, .. } = (area, self.is_horizontal).into();
         let area = area.inner(Margin {
             horizontal: 1,
             vertical: 1,
@@ -291,6 +292,10 @@ impl Component for Gdbtty {
                     crate::app::Mode::Gdb => self.set_handle_key(true),
                     _ => self.set_handle_key(false),
                 };
+                None
+            }
+            action::Action::SwapHV => {
+                self.is_horizontal = !self.is_horizontal;
                 None
             }
             _ => None,

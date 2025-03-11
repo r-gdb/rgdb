@@ -15,6 +15,7 @@ use ratatui::{
 #[derive(Debug, Clone, PartialEq)]
 pub struct StatusBar {
     is_show: bool,
+    is_horizontal: bool,
     mode: Mode,
 }
 
@@ -28,6 +29,7 @@ impl StatusBar {
     pub fn new() -> Self {
         Self {
             is_show: true,
+            is_horizontal: false,
             mode: Mode::default(),
         }
     }
@@ -43,7 +45,12 @@ impl StatusBar {
     fn hit_text(&self) -> Vec<Span<'_>> {
         let hits = match self.mode {
             Mode::Gdb => vec!["<Ctrl-q> Exit", "<Esc> CODE"],
-            Mode::Code => vec!["<←↓↑→> Scroll Code", "<Ctrl-q> Exit", "<Esc> GDB"],
+            Mode::Code => vec![
+                "<←↓↑→> Scroll Code",
+                "<Ctrl-w> Swap",
+                "<Ctrl-q> Exit",
+                "<Esc> GDB",
+            ],
         };
         hits.into_iter()
             .map(|hit| {
@@ -64,7 +71,7 @@ impl StatusBar {
 
     fn draw_all(&mut self, frame: &mut Frame, area: Rect) {
         if self.is_show() {
-            let tool::Layouts { status: area, .. } = area.into();
+            let tool::Layouts { status: area, .. } = (area, self.is_horizontal).into();
             self.draw_status(frame, area);
         }
     }
@@ -90,6 +97,7 @@ impl Component for StatusBar {
         if self.is_show() {
             match action {
                 action::Action::Mode(mode) => self.set_mode(mode),
+                action::Action::SwapHV => self.is_horizontal = !self.is_horizontal,
                 _ => {}
             };
         }

@@ -168,6 +168,7 @@ impl App {
 
     fn handle_actions(&mut self, tui: &mut Tui) -> Result<()> {
         while let Ok(action) = self.action_rx.try_recv() {
+            let mut add_actions: Vec<_> = vec![];
             if action != action::Action::Tick && action != action::Action::Render {
                 debug!("{action:?}");
             }
@@ -182,12 +183,19 @@ impl App {
                 action::Action::Resize(w, h) => self.handle_resize(tui, w, h)?,
                 action::Action::Render => self.render(tui)?,
                 action::Action::Mode(mode) => self.set_mode(mode),
+                action::Action::SwapHV => {
+                    let size: ratatui::prelude::Size = tui.size()?;
+                    add_actions.push(action::Action::Resize(size.width, size.height));
+                }
                 _ => {}
             }
             for component in self.components.iter_mut() {
                 if let Some(action) = component.update(action.clone())? {
-                    self.action_tx.send(action)?
+                    self.action_tx.send(action)?;
                 };
+            }
+            for action in &add_actions {
+                self.action_tx.send(action.clone())?;
             }
         }
         Ok(())

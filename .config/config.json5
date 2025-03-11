@@ -11,6 +11,7 @@
       "<Ctrl-d>": "Quit", // Another way to quit
       "<Ctrl-q>": "Quit", // Yet another way to quit
       "<Ctrl-z>": "Suspend", // Suspend the application
+      "<Ctrl-w>": "SwapHV", 
       "<Esc>": {"Mode":"Gdb"}, 
       "<Up>": {"Code":{"Up": 1}}, 
       "<Down>": {"Code":{"Down": 1}}, 
