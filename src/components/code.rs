@@ -618,7 +618,11 @@ impl Component for Code {
             let line_num_width = total_lines.to_string().len() as u16;
 
             // 获取布局区域
-            let [main_area, status_area, _, _] = tool::get_layout(area);
+            let tool::Layouts {
+                src: main_area,
+                src_status: status_area,
+                ..
+            } = tool::Layouts::from((area, self.is_horizontal));
 
             // 划分主区域为行号、分隔符和代码内容三部分
             let [line_nums_area, separator_area, code_area] = Layout::horizontal([
