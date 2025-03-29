@@ -76,6 +76,22 @@ pub enum Action {
     Right(usize),
 }
 
+#[derive(Default)]
+struct LineInfo {
+    start_line: usize,
+    end_line: usize,
+    line_id: usize,
+    n: usize,
+}
+
+#[derive(Default)]
+struct Areas {
+    ids: Rect,
+    split: Rect,
+    src: Rect,
+    status: Rect,
+}
+
 impl Code {
     pub fn new() -> Self {
         Self::default()
@@ -177,37 +193,43 @@ impl Code {
         (start, end)
     }
 
-    fn draw_all(
-        &self,
-        frame: &mut Frame,
-        start_line: usize,
-        end_line: usize,
-        line_id: usize,
-        n: usize,
-        file: &dyn FileData,
-        area_ids: Rect,
-        area_split: Rect,
-        area_src: Rect,
-        area_status: Rect,
-    ) {
-        let line_id_start_0 = if start_line <= line_id {
-            Some(line_id.saturating_sub(start_line))
+    fn draw_all(&self, frame: &mut Frame, file: &dyn FileData, line_info: LineInfo, areas: Areas) {
+        let line_id_start_0 = if line_info.start_line <= line_info.line_id {
+            Some(line_info.line_id.saturating_sub(line_info.start_line))
         } else {
             None
         };
-        self.draw_src(frame, file, start_line, end_line, area_src);
-        self.draw_id(frame, start_line, end_line, line_id, area_ids);
-        self.draw_breakpoint(frame, file, start_line, end_line, area_ids);
-        self.draw_split(frame, area_split);
+        self.draw_src(
+            frame,
+            file,
+            line_info.start_line,
+            line_info.end_line,
+            areas.src,
+        );
+        self.draw_id(
+            frame,
+            line_info.start_line,
+            line_info.end_line,
+            line_info.line_id,
+            areas.ids,
+        );
+        self.draw_breakpoint(
+            frame,
+            file,
+            line_info.start_line,
+            line_info.end_line,
+            areas.ids,
+        );
+        self.draw_split(frame, areas.split);
         self.draw_currect_pointer(
             frame,
             file,
-            start_line,
+            line_info.start_line,
             &line_id_start_0,
-            area_src.union(area_split),
+            areas.src.union(areas.split),
         );
-        self.draw_status(frame, file, area_status);
-        self.draw_scroll(frame, area_src, n);
+        self.draw_status(frame, file, areas.status);
+        self.draw_scroll(frame, areas.src, line_info.n);
     }
     fn draw_currect_pointer(
         &self,
@@ -264,7 +286,7 @@ impl Code {
     ) {
         let src = match (file.get_read_done(), file.get_highlight_done()) {
             (true, true) => file.get_highlight_lines_range(start_line, end_line).0,
-            (false, true) => file
+            (true, false) => file
                 .get_lines_range(start_line, end_line)
                 .0
                 .iter()
@@ -583,35 +605,53 @@ impl Component for Code {
         Ok(ret)
     }
 
+    /// 绘制代码视图的主要函数
+    ///
+    /// # 参数
+    /// * `frame` - 用于绘制UI的Frame
+    /// * `area` - 绘制区域的矩形范围
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
-        let ans = self.get_file_need_show().map(|(file, _line_id)| {
-            let n = file.get_lines_len();
-            let num_len = n.to_string().len() as u16;
-            let tool::Layouts {
-                src: area,
-                src_status: area_status,
-                ..
-            } = (area, self.is_horizontal).into();
-            let [area_ids, area_split, area_src] = Layout::horizontal([
-                Constraint::Min(num_len),
+        // 获取需要显示的文件信息和布局信息
+        let layout_info = self.get_file_need_show().and_then(|(file, _line_id)| {
+            // 获取文件行数和行号宽度
+            let total_lines = file.get_lines_len();
+            let line_num_width = total_lines.to_string().len() as u16;
+
+            // 获取布局区域
+            let [main_area, status_area, _, _] = tool::get_layout(area);
+
+            // 划分主区域为行号、分隔符和代码内容三部分
+            let [line_nums_area, separator_area, code_area] = Layout::horizontal([
+                Constraint::Min(line_num_width),
                 Constraint::Min(2),
                 Constraint::Percentage(100),
             ])
-            .areas(area);
-            (n, area_ids, area_split, area_src, area_status)
+            .areas(main_area);
+
+            Some((
+                total_lines,
+                line_nums_area,
+                separator_area,
+                code_area,
+                status_area,
+            ))
         });
 
-        ans.map(|(n, _, _, area_src, _)| (area_src.height, n))
-            .map(|(height, n)| {
-                self.legalization_vertical_scroll_range(height as usize, n);
-            });
+        // 根据布局信息调整垂直滚动范围
+        if let Some((total_lines, _, _, code_area, _)) = layout_info {
+            let visible_height = code_area.height as usize;
+            self.legalization_vertical_scroll_range(visible_height, total_lines);
+        }
 
+        // 调整水平滚动范围
         self.get_file_need_show()
             .map(|(file, _)| {
-                if let Some((_, _, _, area_src, _)) = ans {
+                if let Some((_, _, _, area_src, _)) = layout_info {
+                    // 获取当前显示范围内的文本
                     let (start_line, end_line) =
                         self.get_windows_show_file_range(area_src.height as usize);
                     let (src_text, _, _) = file.get_lines_range(start_line, end_line);
+                    // 计算最长行的长度
                     let text_len = src_text.iter().map(|s| s.len()).max().unwrap_or(0);
                     (area_src.width, text_len)
                 } else {
@@ -622,53 +662,39 @@ impl Component for Code {
                 self.legalization_horizontial_scroll_range(width as usize, text_len);
             });
 
-        let ans = if let (
-            Some((n, area_ids, area_split, area_src, area_status)),
-            Some((file, line_id)),
-        ) = (ans, self.get_file_need_show())
-        {
-            let (start_line, end_line) = self.get_windows_show_file_range(area_src.height as usize);
-            let (_, start_line, end_line) = file.get_lines_range(start_line, end_line);
-            Some((
-                start_line,
-                end_line,
-                line_id,
-                n,
-                file,
-                area_ids,
-                area_split,
-                area_src,
-                area_status,
-            ))
-        } else {
-            None
+        // 准备绘制所需的所有信息
+        let draw_info = match layout_info {
+            Some((n, area_ids, area_split, area_src, area_status)) => {
+                if let Some((file, line_id)) = self.get_file_need_show() {
+                    let (start_line, end_line) =
+                        self.get_windows_show_file_range(area_src.height as usize);
+                    let (_, start_line, end_line) = file.get_lines_range(start_line, end_line);
+                    Some((
+                        file,
+                        LineInfo {
+                            start_line,
+                            end_line,
+                            line_id: line_id as usize,
+                            n,
+                        },
+                        Areas {
+                            ids: area_ids,
+                            split: area_split,
+                            src: area_src,
+                            status: area_status,
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+            None => None,
         };
 
-        if let Some((
-            start_line,
-            end_line,
-            line_id,
-            n,
-            file,
-            area_ids,
-            area_split,
-            area_src,
-            area_status,
-        )) = ans
-        {
-            self.draw_all(
-                frame,
-                start_line,
-                end_line,
-                line_id as usize,
-                n,
-                file,
-                area_ids,
-                area_split,
-                area_src,
-                area_status,
-            );
-        };
+        // 执行实际的绘制操作
+        if let Some((file, line_info, areas)) = draw_info {
+            self.draw_all(frame, file, line_info, areas);
+        }
         Ok(())
     }
 }
