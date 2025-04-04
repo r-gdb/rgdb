@@ -7,6 +7,8 @@ use crate::mi::frame::Frame as FrameMi;
 use crate::tool;
 use crate::tool::{FileData, HashSelf, HighlightFileData, TextFileData};
 use crate::{action, config::Config};
+use arboard::Clipboard;
+use color_eyre::owo_colors::OwoColorize;
 use color_eyre::{eyre::Ok, Result};
 use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
@@ -370,8 +372,9 @@ impl Code {
     fn draw_scroll(&self, frame: &mut Frame, area_src: Rect, text_len: usize) {
         let hight = area_src.height as usize;
         let up_half = hight.div_euclid(2);
-        let scrollbar =
-            Scrollbar::new(ScrollbarOrientation::VerticalRight).symbols(scrollbar::VERTICAL);
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .symbols(scrollbar::VERTICAL)
+            .style(Style::default().fg(Color::White));
 
         let mut state = ScrollbarState::new(text_len.saturating_sub(hight))
             .position(self.vertical_scroll.saturating_sub(up_half));
@@ -438,6 +441,8 @@ impl Code {
 
 impl Component for Code {
     fn init(&mut self, area: Size) -> Result<()> {
+        // let mut clipboard = Clipboard::new()?;
+        // clipboard.set_text("Hello, clipboard!")?;
         self.set_area(&area);
         Ok(())
     }

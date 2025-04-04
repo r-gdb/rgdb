@@ -12,6 +12,7 @@ exclude = ["doc/*"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+arboard = "3.5.0"
 better-panic = "0.3.0"
 bytes = "1.9.0"
 clap = { version = "4.5.20", features = [
