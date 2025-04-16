@@ -305,7 +305,7 @@ impl Code {
     }
     fn draw_status(&self, frame: &mut Frame, file: &dyn FileData, area_status: Rect) {
         let title = file.get_status();
-        let scroll_x = title.len().saturating_sub(self.area.width as usize) as u16;
+        let scroll_x = title.len().saturating_sub(area_status.width as usize) as u16;
         let paragraph_status = Paragraph::new(title)
             .fg(Color::Black)
             .bg(Color::Gray)
@@ -459,7 +459,7 @@ impl Component for Code {
         &mut self,
         mouse: crossterm::event::MouseEvent,
     ) -> Result<Option<action::Action>> {
-        // debug!("gen mouseEvent {:?}", &mouse);
+        debug!("gen mouseEvent {:?}", &mouse);
         let is_in = self
             .area
             .contains(ratatui::layout::Position::new(mouse.column, mouse.row));
