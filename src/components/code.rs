@@ -15,6 +15,7 @@ use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+use std::ops::Sub;
 use std::rc::Rc;
 use strum::Display;
 use symbols::scrollbar;
@@ -96,10 +97,15 @@ struct LineInfo {
 
 #[derive(Default)]
 struct Areas {
+    area: AreasNoStatus,
+    status: Rect,
+}
+
+#[derive(Default)]
+struct AreasNoStatus {
     ids: Rect,
     split: Rect,
     src: Rect,
-    status: Rect,
 }
 
 impl Code {
@@ -204,7 +210,9 @@ impl Code {
     }
     fn legalization_vertical_scroll_range_no_args(&mut self) {
         // 根据布局信息调整垂直滚动范围
-        if let Some((total_lines, _, _, code_area)) = self.get_file_show_areas_and_len(self.area) {
+        if let Some((_, LineInfo { n: total_lines, .. }, AreasNoStatus { src: code_area, .. })) =
+            self.get_file_show_areas_and_len(self.area)
+        {
             let visible_height = code_area.height as usize;
             self.legalization_vertical_scroll_range(visible_height, total_lines);
         } else {
@@ -224,7 +232,9 @@ impl Code {
         // 调整水平滚动范围
         self.get_file_need_show()
             .map(|(file, _)| {
-                if let Some((_, _, _, area_src)) = self.get_file_show_areas_and_len(self.area) {
+                if let Some((_, _, AreasNoStatus { src: area_src, .. })) =
+                    self.get_file_show_areas_and_len(self.area)
+                {
                     // 获取当前显示范围内的文本
                     let (start_line, end_line) =
                         self.get_windows_show_file_range(area_src.height as usize);
@@ -259,9 +269,12 @@ impl Code {
         (start, end)
     }
 
-    fn get_file_show_areas_and_len(&self, src_area: Rect) -> Option<(usize, Rect, Rect, Rect)> {
+    fn get_file_show_areas_and_len(
+        &self,
+        src_area: Rect,
+    ) -> Option<(&dyn FileData, LineInfo, AreasNoStatus)> {
         // 获取需要显示的文件信息和布局信息
-        let layout_info = self.get_file_need_show().and_then(|(file, _line_id)| {
+        let info = self.get_file_need_show().and_then(|(file, line_id)| {
             // 获取文件行数和行号宽度
             let total_lines = file.get_lines_len();
             let line_num_width = total_lines.to_string().len() as u16;
@@ -272,10 +285,25 @@ impl Code {
                 Constraint::Percentage(100),
             ])
             .areas(src_area);
-
-            Some((total_lines, line_nums_area, separator_area, code_area))
+            let (start_line, end_line) =
+                self.get_windows_show_file_range(code_area.height as usize);
+            let (_, start_line, end_line) = file.get_lines_range(start_line, end_line);
+            Some((
+                file,
+                LineInfo {
+                    start_line,
+                    end_line,
+                    line_id: line_id as usize,
+                    n: total_lines,
+                },
+                AreasNoStatus {
+                    ids: line_nums_area,
+                    split: separator_area,
+                    src: code_area,
+                },
+            ))
         });
-        layout_info
+        info
     }
     fn get_file_show_info(&self, area: Rect) -> Option<(&dyn FileData, LineInfo, Areas)> {
         // 获取布局区域
@@ -284,47 +312,18 @@ impl Code {
             src_status: status_area,
             ..
         } = tool::Layouts::from((area, self.is_horizontal));
-        // 获取需要显示的文件信息和布局信息
-        let layout_info = self.get_file_show_areas_and_len(src_area).and_then(
-            |(total_lines, line_nums_area, separator_area, code_area)| {
+        let draw_info = self.get_file_show_areas_and_len(src_area).and_then(
+            |(file, lineinfo, area_no_status)| {
                 Some((
-                    total_lines,
-                    line_nums_area,
-                    separator_area,
-                    code_area,
-                    status_area,
+                    file,
+                    lineinfo,
+                    Areas {
+                        area: area_no_status,
+                        status: status_area,
+                    },
                 ))
             },
         );
-
-        // 准备绘制所需的所有信息
-        let draw_info = match layout_info {
-            Some((n, area_ids, area_split, area_src, area_status)) => {
-                if let Some((file, line_id)) = self.get_file_need_show() {
-                    let (start_line, end_line) =
-                        self.get_windows_show_file_range(area_src.height as usize);
-                    let (_, start_line, end_line) = file.get_lines_range(start_line, end_line);
-                    Some((
-                        file,
-                        LineInfo {
-                            start_line,
-                            end_line,
-                            line_id: line_id as usize,
-                            n,
-                        },
-                        Areas {
-                            ids: area_ids,
-                            split: area_split,
-                            src: area_src,
-                            status: area_status,
-                        },
-                    ))
-                } else {
-                    None
-                }
-            }
-            None => None,
-        };
         return draw_info;
     }
     fn draw_all(&self, frame: &mut Frame, file: &dyn FileData, line_info: LineInfo, areas: Areas) {
@@ -338,32 +337,32 @@ impl Code {
             file,
             line_info.start_line,
             line_info.end_line,
-            areas.src,
+            areas.area.src,
         );
         self.draw_id(
             frame,
             line_info.start_line,
             line_info.end_line,
             line_info.line_id,
-            areas.ids,
+            areas.area.ids,
         );
         self.draw_breakpoint(
             frame,
             file,
             line_info.start_line,
             line_info.end_line,
-            areas.ids,
+            areas.area.ids,
         );
-        self.draw_split(frame, areas.split);
+        self.draw_split(frame, areas.area.split);
         self.draw_currect_pointer(
             frame,
             file,
             line_info.start_line,
             &line_id_start_0,
-            areas.src.union(areas.split),
+            areas.area.src.union(areas.area.split),
         );
         self.draw_status(frame, file, areas.status);
-        self.draw_scroll(frame, areas.src, line_info.n);
+        self.draw_scroll(frame, areas.area.src, line_info.n);
     }
     fn draw_currect_pointer(
         &self,
@@ -569,12 +568,43 @@ impl Code {
         }
         ret
     }
+    fn chenge_tui_poisition_to_file_position(
+        &self,
+        row: u16,
+        column: u16,
+    ) -> Option<(usize, usize)> {
+        if let Some((_, lineinfo, AreasNoStatus { src: src_area, .. })) =
+            self.get_file_show_areas_and_len(self.area)
+        {
+            debug!(
+                "chenge_tui_poisition_to_file_position input row {} column {} rect {:?}",
+                row, column, src_area
+            );
+            if src_area.contains(ratatui::layout::Position::new(column, row)) {
+                let row = (row as usize)
+                    .saturating_sub(src_area.y as usize)
+                    .saturating_add(lineinfo.start_line);
+                let col = (column as usize)
+                    .saturating_sub(src_area.x as usize)
+                    .saturating_add(self.horizontial_scroll);
+                debug!(
+                    "chenge_tui_poisition_to_file_position row {} col {}",
+                    row, col
+                );
+                Some((row, col))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
 }
 
 impl TextSelection for Code {
     fn handle_selection(&mut self, mouse: crossterm::event::MouseEvent) -> bool {
         let pos = (mouse.row, mouse.column);
-        match mouse.kind {
+        let ret = match mouse.kind {
             crossterm::event::MouseEventKind::Down(MouseButton::Left) => {
                 self.select_range_now = Some(MouseSelect {
                     start: pos,
@@ -608,12 +638,48 @@ impl TextSelection for Code {
                 false
             }
             _ => false,
-        }
+        };
+        debug!("selesct is {:?}", &self.select_range_last);
+        debug!("selesct string {:?}", self.get_selected_text());
+        ret
     }
 
     fn get_selected_text(&self) -> Option<String> {
-        let selected = "select text";
-        Some(selected.to_string())
+        let selected = match (
+            self.select_range_last.clone(),
+            self.get_file_show_areas_and_len(self.area),
+        ) {
+            (
+                Some(MouseSelect {
+                    start: (start_row, start_col),
+                    end: (end_row, end_col),
+                }),
+                Some((file, lineinfo, area)),
+            ) => {
+                debug!(
+                    "start_row {} start_col {} end_row {} end_col {}",
+                    start_row, start_col, end_row, end_col
+                );
+                if let (Some(file_start), Some(file_end)) = (
+                    self.chenge_tui_poisition_to_file_position(start_row, start_col),
+                    self.chenge_tui_poisition_to_file_position(end_row, end_col),
+                ) {
+                    let selected = file
+                        .get_lines_range(file_start.0, file_end.0 + 1)
+                        .0
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                        .join("");
+                    Some(selected)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        // debug!("selected string is {:?}", &selected);
+        selected
     }
 
     // /// 根据显示宽度获取字符位置
