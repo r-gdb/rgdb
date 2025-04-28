@@ -17,6 +17,8 @@
       "<Down>": {"Code":{"Down": 1}}, 
       "<Left>": {"Code":{"Left": 1}}, 
       "<Right>": {"Code":{"Right": 1}}, 
+      "<PageUp>": {"Code":"PageUP"},
+      "<PageDown>": {"Code":"PagegDown"},
     },
   }
 }

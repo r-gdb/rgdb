@@ -82,6 +82,8 @@ pub enum Action {
     Down(usize),
     Left(usize),
     Right(usize),
+    PageUP,
+    PagegDown,
 }
 
 #[derive(Default)]
@@ -702,6 +704,14 @@ impl Component for Code {
             }
             action::Action::Code(Action::Right(p)) => {
                 self.file_right(p);
+            }
+            action::Action::Code(Action::PageUP) => {
+                let n = self.area.height as usize;
+                ret = Some(action::Action::Code(Action::Up(n)));
+            }
+            action::Action::Code(Action::PagegDown) => {
+                let n = self.area.height as usize;
+                ret = Some(action::Action::Code(Action::Down(n)));
             }
             action::Action::SwapHV => {
                 self.is_horizontal = !self.is_horizontal;
