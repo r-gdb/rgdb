@@ -3002,6 +3002,8 @@ dependencies = [
  "tracing-subscriber",
  "tui-term",
  "tui-widgets",
+ "unicode-segmentation",
+ "unicode-width 0.2.0",
  "vergen-gix",
  "vt100",
  "which",

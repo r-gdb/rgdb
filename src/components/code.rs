@@ -3,20 +3,23 @@ use crate::components::code::asmfuncdata::AsmFuncData;
 use crate::components::code::breakpoint::BreakPointData;
 use crate::components::code::srcfiledata::SrcFileData;
 use crate::components::gdbmi;
+use crate::components::mouse_select::{MouseSelect, SelectionRange, TextSelection};
 use crate::mi::frame::Frame as FrameMi;
 use crate::tool;
 use crate::tool::{FileData, HashSelf, HighlightFileData, TextFileData};
 use crate::{action, config::Config};
 use arboard::Clipboard;
-use color_eyre::owo_colors::OwoColorize;
 use color_eyre::{eyre::Ok, Result};
+use crossterm::event::MouseButton;
 use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+
 use std::rc::Rc;
 use strum::Display;
 use symbols::scrollbar;
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthChar;
 
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
@@ -40,6 +43,9 @@ pub struct Code {
     horizontial_scroll: usize,
     area: Rect,
     is_horizontal: bool,
+    // 文本选择状态
+    select_range_now: Option<MouseSelect>,
+    select_range_last: Option<MouseSelect>,
 }
 
 #[derive(Default)]
@@ -96,7 +102,29 @@ struct Areas {
 
 impl Code {
     pub fn new() -> Self {
-        Self::default()
+        let mut a = Self::default();
+        a.vertical_scroll = 1;
+        a
+    }
+
+    // /// 计算字符串的显示宽度(正确处理UTF8和中文字符)
+    // fn display_width(text: &str) -> usize {
+    //     text.graphemes(true)
+    //         .map(|g| UnicodeWidthChar::width(g.chars().next().unwrap_or(' ')))
+    //         .sum()
+    // }
+
+    /// 获取字符串在指定位置的字符(考虑UTF8字符宽度)
+    fn get_char_at_pos(text: &str, pos: usize) -> Option<(usize, char)> {
+        let mut width = 0;
+        for (i, c) in text.char_indices() {
+            let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
+            if width + char_width > pos {
+                return Some((i, c));
+            }
+            width += char_width;
+        }
+        None
     }
     fn get_file_need_show(&self) -> Option<(&dyn FileData, u64)> {
         match self.get_file_need_show_return_file() {
@@ -158,15 +186,28 @@ impl Code {
     }
     fn file_down(&mut self, n: usize) {
         self.vertical_scroll = self.vertical_scroll.saturating_add(n);
+        self.legalization_vertical_scroll_range_no_args();
     }
     fn file_up(&mut self, n: usize) {
         self.vertical_scroll = self.vertical_scroll.saturating_sub(n);
+        self.legalization_vertical_scroll_range_no_args();
     }
     fn file_left(&mut self, n: usize) {
         self.horizontial_scroll = self.horizontial_scroll.saturating_sub(n);
+        self.legalization_horizontial_scroll_range_no_args();
     }
     fn file_right(&mut self, n: usize) {
         self.horizontial_scroll = self.horizontial_scroll.saturating_add(n);
+        self.legalization_horizontial_scroll_range_no_args();
+    }
+    fn legalization_vertical_scroll_range_no_args(&mut self) {
+        // 根据布局信息调整垂直滚动范围
+        if let Some((total_lines, _, _, code_area)) = self.get_file_show_areas_and_len(self.area) {
+            let visible_height = code_area.height as usize;
+            self.legalization_vertical_scroll_range(visible_height, total_lines);
+        } else {
+            self.vertical_scroll = 0;
+        }
     }
     fn legalization_vertical_scroll_range(&mut self, hight: usize, n: usize) -> (usize, usize) {
         let up_half = hight.div_euclid(2);
@@ -177,6 +218,27 @@ impl Code {
         self.vertical_scroll = self.vertical_scroll.min(end);
         (start, end)
     }
+    fn legalization_horizontial_scroll_range_no_args(&mut self) {
+        // 调整水平滚动范围
+        self.get_file_need_show()
+            .map(|(file, _)| {
+                if let Some((_, _, _, area_src)) = self.get_file_show_areas_and_len(self.area) {
+                    // 获取当前显示范围内的文本
+                    let (start_line, end_line) =
+                        self.get_windows_show_file_range(area_src.height as usize);
+                    let (src_text, _, _) = file.get_lines_range(start_line, end_line);
+                    // 计算最长行的长度
+                    let text_len = src_text.iter().map(|s| s.len()).max().unwrap_or(0);
+                    (area_src.width, text_len)
+                } else {
+                    (0, 0_usize)
+                }
+            })
+            .map(|(width, text_len)| {
+                self.legalization_horizontial_scroll_range(width as usize, text_len);
+            });
+    }
+
     fn legalization_horizontial_scroll_range(
         &mut self,
         width: usize,
@@ -190,11 +252,79 @@ impl Code {
     }
     fn get_windows_show_file_range(&self, hight: usize) -> (usize, usize) {
         let up_half = hight.div_euclid(2);
-        let start = self.vertical_scroll.saturating_sub(up_half);
+        let start = self.vertical_scroll.saturating_sub(up_half).max(1);
         let end = start.saturating_add(hight);
         (start, end)
     }
 
+    fn get_file_show_areas_and_len(&self, src_area: Rect) -> Option<(usize, Rect, Rect, Rect)> {
+        // 获取需要显示的文件信息和布局信息
+        let layout_info = self.get_file_need_show().and_then(|(file, _line_id)| {
+            // 获取文件行数和行号宽度
+            let total_lines = file.get_lines_len();
+            let line_num_width = total_lines.to_string().len() as u16;
+            // 划分主区域为行号、分隔符和代码内容三部分
+            let [line_nums_area, separator_area, code_area] = Layout::horizontal([
+                Constraint::Min(line_num_width),
+                Constraint::Min(2),
+                Constraint::Percentage(100),
+            ])
+            .areas(src_area);
+
+            Some((total_lines, line_nums_area, separator_area, code_area))
+        });
+        layout_info
+    }
+    fn get_file_show_info(&self, area: Rect) -> Option<(&dyn FileData, LineInfo, Areas)> {
+        // 获取布局区域
+        let tool::Layouts {
+            src: src_area,
+            src_status: status_area,
+            ..
+        } = tool::Layouts::from((area, self.is_horizontal));
+        // 获取需要显示的文件信息和布局信息
+        let layout_info = self.get_file_show_areas_and_len(src_area).and_then(
+            |(total_lines, line_nums_area, separator_area, code_area)| {
+                Some((
+                    total_lines,
+                    line_nums_area,
+                    separator_area,
+                    code_area,
+                    status_area,
+                ))
+            },
+        );
+
+        // 准备绘制所需的所有信息
+        let draw_info = match layout_info {
+            Some((n, area_ids, area_split, area_src, area_status)) => {
+                if let Some((file, line_id)) = self.get_file_need_show() {
+                    let (start_line, end_line) =
+                        self.get_windows_show_file_range(area_src.height as usize);
+                    let (_, start_line, end_line) = file.get_lines_range(start_line, end_line);
+                    Some((
+                        file,
+                        LineInfo {
+                            start_line,
+                            end_line,
+                            line_id: line_id as usize,
+                            n,
+                        },
+                        Areas {
+                            ids: area_ids,
+                            split: area_split,
+                            src: area_src,
+                            status: area_status,
+                        },
+                    ))
+                } else {
+                    None
+                }
+            }
+            None => None,
+        };
+        return draw_info;
+    }
     fn draw_all(&self, frame: &mut Frame, file: &dyn FileData, line_info: LineInfo, areas: Areas) {
         let line_id_start_0 = if line_info.start_line <= line_info.line_id {
             Some(line_info.line_id.saturating_sub(line_info.start_line))
@@ -321,7 +451,7 @@ impl Code {
 
         area_ids: Rect,
     ) {
-        let ids: Vec<usize> = (start_line..end_line.saturating_add(1)).collect::<Vec<_>>();
+        let ids: Vec<usize> = (start_line..end_line).collect::<Vec<_>>();
         let text_ids = Text::from_iter(ids.iter().map(|s| {
             let line = Line::from_iter(s.to_string().chars().map(|c| Span::raw(c.to_string())));
             if *s == line_id {
@@ -439,6 +569,69 @@ impl Code {
     }
 }
 
+impl TextSelection for Code {
+    fn handle_selection(&mut self, mouse: crossterm::event::MouseEvent) -> bool {
+        let pos = (mouse.row, mouse.column);
+        match mouse.kind {
+            crossterm::event::MouseEventKind::Down(MouseButton::Left) => {
+                self.select_range_now = Some(MouseSelect {
+                    start: pos,
+                    end: pos,
+                });
+                self.select_range_last = None;
+                true
+            }
+            crossterm::event::MouseEventKind::Drag(MouseButton::Left) => {
+                match self.select_range_now {
+                    Some(ref mut select) => {
+                        select.end = pos;
+                    }
+                    None => {
+                        error!("Mouse selection not initialized");
+                    }
+                }
+                true
+            }
+            crossterm::event::MouseEventKind::Up(MouseButton::Left) => {
+                match self.select_range_now {
+                    Some(ref mut select) => {
+                        select.end = pos;
+                    }
+                    None => {
+                        error!("Mouse selection not initialized");
+                    }
+                }
+                self.select_range_last = self.select_range_now.clone();
+                self.select_range_now = None;
+                false
+            }
+            _ => false,
+        }
+    }
+
+    fn get_selected_text(&self) -> Option<String> {
+        let selected = "select text";
+        Some(selected.to_string())
+    }
+
+    // /// 根据显示宽度获取字符位置
+    // fn get_char_pos(text: &str, display_pos: usize) -> Option<usize> {
+    //     let mut width = 0;
+    //     for (i, c) in text.char_indices() {
+    //         let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
+    //         if width + char_width > display_pos {
+    //             return Some(i);
+    //         }
+    //         width += char_width;
+    //     }
+    //     None
+    // }
+
+    fn get_selected_area(&self) -> Option<Vec<SelectionRange>> {
+        None
+    }
+}
+
 impl Component for Code {
     fn init(&mut self, area: Size) -> Result<()> {
         // let mut clipboard = Clipboard::new()?;
@@ -463,17 +656,28 @@ impl Component for Code {
         let is_in = self
             .area
             .contains(ratatui::layout::Position::new(mouse.column, mouse.row));
-        match mouse.kind {
-            crossterm::event::MouseEventKind::ScrollUp => match is_in {
-                true => Ok(Some(action::Action::Code(Action::Up(3)))),
-                false => Ok(None),
-            },
-            crossterm::event::MouseEventKind::ScrollDown => match is_in {
-                true => Ok(Some(action::Action::Code(Action::Down(3)))),
-                false => Ok(None),
-            },
-            _ => Ok(None),
-        }
+
+        // 处理鼠标选择事件
+        let selection_changed = self.handle_selection(mouse.clone());
+
+        // 处理滚动事件
+        let action = match mouse.kind {
+            crossterm::event::MouseEventKind::ScrollUp if is_in => {
+                Some(action::Action::Code(Action::Up(3)))
+            }
+            crossterm::event::MouseEventKind::ScrollDown if is_in => {
+                Some(action::Action::Code(Action::Down(3)))
+            }
+            crossterm::event::MouseEventKind::Up(_) if selection_changed => {
+                if let Some(text) = self.get_selected_text() {
+                    let _ = Clipboard::new().and_then(|mut cb| cb.set_text(text));
+                }
+                None
+            }
+            _ => None,
+        };
+
+        Ok(action)
     }
     fn update(&mut self, action: action::Action) -> Result<Option<action::Action>> {
         let mut ret = None;
@@ -611,95 +815,12 @@ impl Component for Code {
     }
 
     /// 绘制代码视图的主要函数
-    ///
     /// # 参数
     /// * `frame` - 用于绘制UI的Frame
     /// * `area` - 绘制区域的矩形范围
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
-        // 获取需要显示的文件信息和布局信息
-        let layout_info = self.get_file_need_show().and_then(|(file, _line_id)| {
-            // 获取文件行数和行号宽度
-            let total_lines = file.get_lines_len();
-            let line_num_width = total_lines.to_string().len() as u16;
-
-            // 获取布局区域
-            let tool::Layouts {
-                src: main_area,
-                src_status: status_area,
-                ..
-            } = tool::Layouts::from((area, self.is_horizontal));
-
-            // 划分主区域为行号、分隔符和代码内容三部分
-            let [line_nums_area, separator_area, code_area] = Layout::horizontal([
-                Constraint::Min(line_num_width),
-                Constraint::Min(2),
-                Constraint::Percentage(100),
-            ])
-            .areas(main_area);
-
-            Some((
-                total_lines,
-                line_nums_area,
-                separator_area,
-                code_area,
-                status_area,
-            ))
-        });
-
-        // 根据布局信息调整垂直滚动范围
-        if let Some((total_lines, _, _, code_area, _)) = layout_info {
-            let visible_height = code_area.height as usize;
-            self.legalization_vertical_scroll_range(visible_height, total_lines);
-        }
-
-        // 调整水平滚动范围
-        self.get_file_need_show()
-            .map(|(file, _)| {
-                if let Some((_, _, _, area_src, _)) = layout_info {
-                    // 获取当前显示范围内的文本
-                    let (start_line, end_line) =
-                        self.get_windows_show_file_range(area_src.height as usize);
-                    let (src_text, _, _) = file.get_lines_range(start_line, end_line);
-                    // 计算最长行的长度
-                    let text_len = src_text.iter().map(|s| s.len()).max().unwrap_or(0);
-                    (area_src.width, text_len)
-                } else {
-                    (0, 0_usize)
-                }
-            })
-            .map(|(width, text_len)| {
-                self.legalization_horizontial_scroll_range(width as usize, text_len);
-            });
-
         // 准备绘制所需的所有信息
-        let draw_info = match layout_info {
-            Some((n, area_ids, area_split, area_src, area_status)) => {
-                if let Some((file, line_id)) = self.get_file_need_show() {
-                    let (start_line, end_line) =
-                        self.get_windows_show_file_range(area_src.height as usize);
-                    let (_, start_line, end_line) = file.get_lines_range(start_line, end_line);
-                    Some((
-                        file,
-                        LineInfo {
-                            start_line,
-                            end_line,
-                            line_id: line_id as usize,
-                            n,
-                        },
-                        Areas {
-                            ids: area_ids,
-                            split: area_split,
-                            src: area_src,
-                            status: area_status,
-                        },
-                    ))
-                } else {
-                    None
-                }
-            }
-            None => None,
-        };
-
+        let draw_info = self.get_file_show_info(area);
         // 执行实际的绘制操作
         if let Some((file, line_info, areas)) = draw_info {
             self.draw_all(frame, file, line_info, areas);

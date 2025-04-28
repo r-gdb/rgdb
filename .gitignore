@@ -1,5 +1,5 @@
 /target
-.data/*.log
+.data/*
 .VSCodeCounter/
 build/*
-
+.continue
