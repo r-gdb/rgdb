@@ -9,6 +9,8 @@ use std::hash::Hash;
 use std::rc::Rc;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::error;
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 const NORD_THEME: &str = include_str!("../themes/Nord.tmTheme");
 const ASSEMBLY_X86_64: &str = include_str!("../syntaxes/assembly_x86_64.sublime-syntax");
 
@@ -158,6 +160,34 @@ pub fn send_action(send: &UnboundedSender<action::Action>, action: action::Actio
         }
     }
 }
+
+pub fn get_str_by_display_range(s: &String, start: usize, end: usize) -> Option<&str> {
+    let ret = UnicodeSegmentation::grapheme_indices(s.as_str(), true)
+        .map(|(id, s)| (id, s.width(), s))
+        .scan(0_usize, |len, (index, display_width, s)| {
+            let display_start = len.clone();
+            *len += display_width;
+            Some((index, display_start, display_width, s))
+        })
+        .skip_while(|(id, display_start, display_width, s)| *display_start < start)
+        .take_while(|(id, display_start, display_width, s)| *display_start + *display_width <= end)
+        .fold(
+            None,
+            |range, (id, display_start, display_width, s)| match range {
+                None => Some((id, id + s.len())),
+                Some((start, end)) => Some((start, id + s.len())),
+            },
+        )
+        .and_then(|(start, end)| {
+            if start < end && end <= s.len() {
+                Some(&s[start..end])
+            } else {
+                None
+            }
+        });
+    ret
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,5 +211,77 @@ mod tests {
         let syntax_set = get_syntax_set("cpp");
         assert!(syntax_set.find_syntax_by_extension("cpp").is_some());
         assert!(syntax_set.find_syntax_by_extension("h").is_some());
+    }
+    #[test]
+    fn display_get_1() {
+        let s = "1234567890".to_string();
+        let start = 0;
+        let end = 10;
+        let ret = get_str_by_display_range(&s, start, end);
+        assert_eq!(ret, Some("1234567890"));
+    }
+    #[test]
+    fn display_get_2() {
+        let s = "1234567890".to_string();
+        let start = 0;
+        let end = 5;
+        let ret = get_str_by_display_range(&s, start, end);
+        assert_eq!(ret, Some("12345"));
+    }
+    #[test]
+    fn display_get_3() {
+        let s = "1234567890".to_string();
+        let start = 1;
+        let end = 9;
+        let ret = get_str_by_display_range(&s, start, end);
+        assert_eq!(ret, Some("23456789"));
+    }
+    #[test]
+    fn display_get_4() {
+        let s = "0123中文😀567".to_string();
+        let start = 1;
+        let end = 11;
+        let ret = get_str_by_display_range(&s, start, end);
+        assert_eq!(ret, Some("123中文😀5"));
+    }
+    #[test]
+    fn display_get_5() {
+        let s = "0123中文😀567".to_string();
+        let start = 5;
+        let end = 11;
+        let ret = get_str_by_display_range(&s, start, end);
+        assert_eq!(ret, Some("文😀5"));
+    }
+    #[test]
+    fn display_get_6() {
+        let s = "0123中文😀567".to_string();
+        let start = 5;
+        let end = 9;
+        let ret = get_str_by_display_range(&s, start, end);
+        assert_eq!(ret, Some("文"));
+    }
+    #[test]
+    fn display_get_7() {
+        let s = "0123中文😀1234\n".to_string();
+        let start = 5;
+        let end = 15;
+        let ret = get_str_by_display_range(&s, start, end);
+        assert_eq!(ret, Some("文😀1234\n"));
+    }
+    #[test]
+    fn display_get_8() {
+        let s = "0123中文😀1234\n".to_string();
+        let start = 5;
+        let end = 2000;
+        let ret = get_str_by_display_range(&s, start, end);
+        assert_eq!(ret, Some("文😀1234\n"));
+    }
+    #[test]
+    fn display_get_9() {
+        let s = "0123中文😀1234\n".to_string();
+        let start = 100;
+        let end = 2000;
+        let ret = get_str_by_display_range(&s, start, end);
+        assert_eq!(ret, None);
     }
 }
