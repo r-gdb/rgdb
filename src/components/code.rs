@@ -14,16 +14,14 @@ use crossterm::event::MouseButton;
 use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-
-use std::ops::Sub;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+extern crate unicode_segmentation;
 use std::rc::Rc;
 use strum::Display;
 use symbols::scrollbar;
-use unicode_segmentation::UnicodeSegmentation;
-use unicode_width::UnicodeWidthChar;
-
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
+use unicode_segmentation::UnicodeSegmentation;
 
 mod asmfuncdata;
 pub mod breakpoint;
@@ -327,6 +325,7 @@ impl Code {
         return draw_info;
     }
     fn draw_all(&self, frame: &mut Frame, file: &dyn FileData, line_info: LineInfo, areas: Areas) {
+        self.draw_select(frame);
         let line_id_start_0 = if line_info.start_line <= line_info.line_id {
             Some(line_info.line_id.saturating_sub(line_info.start_line))
         } else {
@@ -511,6 +510,23 @@ impl Code {
             .position(self.vertical_scroll.saturating_sub(up_half));
         frame.render_stateful_widget(scrollbar, area_src, &mut state);
     }
+    fn draw_select(&self, frame: &mut Frame) {
+        if let Some(select) = self.get_selected_area() {
+            select.iter().for_each(|s| {
+                let select_len = s.end_column.saturating_sub(s.start_column);
+                let text = Text::from_iter(Line::from_iter(std::iter::repeat_n(" ", select_len)));
+                let paragraph = Paragraph::new(text).bg(Color::Rgb(255, 204, 153));
+                let area = Rect::new(
+                    s.start_column as u16,
+                    s.line_number as u16,
+                    select_len as u16,
+                    1,
+                );
+                frame.render_widget(paragraph, area);
+                debug!("draw select area {:?}", &area);
+            });
+        }
+    }
     fn set_vertical_to_stop_point(&mut self, file_name: &String) {
         match self.get_file_need_show() {
             Some((file, line_id)) => {
@@ -610,7 +626,7 @@ impl TextSelection for Code {
                     start: pos,
                     end: pos,
                 });
-                self.select_range_last = None;
+                self.select_range_last = self.select_range_now.clone();
                 true
             }
             crossterm::event::MouseEventKind::Drag(MouseButton::Left) => {
@@ -622,6 +638,7 @@ impl TextSelection for Code {
                         error!("Mouse selection not initialized");
                     }
                 }
+                self.select_range_last = self.select_range_now.clone();
                 true
             }
             crossterm::event::MouseEventKind::Up(MouseButton::Left) => {
@@ -633,12 +650,22 @@ impl TextSelection for Code {
                         error!("Mouse selection not initialized");
                     }
                 }
-                self.select_range_last = self.select_range_now.clone();
+                self.select_range_last = None;
                 self.select_range_now = None;
-                false
+                true
             }
             _ => false,
         };
+        match self.select_range_last {
+            Some(ref mut select) => {
+                if select.start > select.end {
+                    std::mem::swap(&mut select.start, &mut select.end);
+                }
+            }
+            None => {
+                error!("Mouse selection not initialized");
+            }
+        }
         debug!("selesct is {:?}", &self.select_range_last);
         debug!("selesct string {:?}", self.get_selected_text());
         ret
@@ -696,7 +723,86 @@ impl TextSelection for Code {
     // }
 
     fn get_selected_area(&self) -> Option<Vec<SelectionRange>> {
-        None
+        let selected = if let Some((
+            _,
+            _,
+            AreasNoStatus {
+                ids: ids_area,
+                split: split_area,
+                ..
+            },
+        )) = self.get_file_show_areas_and_len(self.area)
+        {
+            let area = ids_area.union(split_area);
+            let area_width = area.width;
+            match (
+                self.select_range_last.clone(),
+                self.get_file_show_areas_and_len(self.area),
+            ) {
+                (
+                    Some(MouseSelect {
+                        start: (start_row, start_col),
+                        end: (end_row, end_col),
+                    }),
+                    Some((file, lineinfo, area)),
+                ) => {
+                    debug!(
+                        "start_row {} start_col {} end_row {} end_col {}",
+                        start_row, start_col, end_row, end_col
+                    );
+                    if let (Some(file_start), Some(file_end)) = (
+                        self.chenge_tui_poisition_to_file_position(start_row, start_col),
+                        self.chenge_tui_poisition_to_file_position(end_row, end_col),
+                    ) {
+                        let (lines_str, line_start_id, line_end_id) =
+                            file.get_lines_range(file_start.0, file_end.0 + 1);
+                        if line_start_id != file_start.0 {
+                            error!(
+                                "file start line not same {} {}",
+                                line_start_id, file_start.0
+                            );
+                            None
+                        } else {
+                            let selected = lines_str
+                                .iter()
+                                .enumerate()
+                                .map(|(id, s)| {
+                                    let id_file = id + line_start_id;
+                                    let start = if id_file == file_start.0 {
+                                        file_start.1.max(0)
+                                    } else {
+                                        0
+                                    };
+                                    let width = s.width();
+                                    let end = if id_file == file_end.0 {
+                                        file_end.1.min(width)
+                                    } else {
+                                        width
+                                    };
+                                    (
+                                        start.saturating_add(area_width.into()),
+                                        end.saturating_add(area_width.into()),
+                                        id.saturating_add(start_row.into()),
+                                    )
+                                })
+                                .map(|(start, end, id)| SelectionRange {
+                                    line_number: id,
+                                    start_column: start,
+                                    end_column: end,
+                                })
+                                .collect::<Vec<_>>();
+                            Some(selected)
+                        }
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+        selected
     }
 }
 

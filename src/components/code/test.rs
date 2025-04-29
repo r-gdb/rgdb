@@ -436,4 +436,50 @@ mod tests {
         println!("{:?}", &status);
         assert!(status == "** Dump of assembler code for function main: (0x1 - 0x3b) **");
     }
+    #[test]
+    fn test_utf8_iter() {
+        extern crate unicode_segmentation;
+        use unicode_segmentation::UnicodeSegmentation;
+        let s = "abcd 中文混合 asdef\r\nasdne";
+        let g = UnicodeSegmentation::graphemes(s, true).collect::<Vec<&str>>();
+        let b: &[_] = &[
+            "a", "b", "c", "d", " ", "中", "文", "混", "合", " ", "a", "s", "d", "e", "f", "\r\n",
+            "a", "s", "d", "n", "e",
+        ];
+        assert_eq!(g, b);
+    }
+    #[test]
+    fn test_utf8_width_1(){
+        use unicode_width::UnicodeWidthStr;
+        let hello = String::from("السلام عليكم");
+        assert_eq!(hello.width(), 11);
+        let hello = String::from("Dobrý den");
+        assert_eq!(hello.width(), 9);
+        let hello = String::from("Hello");
+        assert_eq!(hello.width(), 5);
+        let hello = String::from("שלום");
+        assert_eq!(hello.width(), 4);
+        let hello = String::from("नमस्ते");
+        assert_eq!(hello.width(), 4);
+        let hello = String::from("こんにちは");
+        assert_eq!(hello.width(), 10);
+        let hello = String::from("안녕하세요");
+        assert_eq!(hello.width(), 10);
+        let hello = String::from("你好");
+        assert_eq!(hello.width(), 4);
+        let hello = String::from("Olá");
+        assert_eq!(hello.width(), 3);
+        let hello = String::from("Здравствуйте");
+        assert_eq!(hello.width(), 12);
+        let hello = String::from("Hola");
+        assert_eq!(hello.width(), 4);
+    }
+    #[test]
+    fn test_utf8_width_2(){
+        use unicode_width::UnicodeWidthStr;
+        let hello = String::from("🙏");
+        assert_eq!(hello.width(), 2);
+
+    }
+
 }
