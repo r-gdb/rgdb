@@ -284,4 +284,24 @@ mod tests {
         let ret = get_str_by_display_range(&s, start, end);
         assert_eq!(ret, None);
     }
+    #[test]
+    fn test_display_range_with_combining_characters() {
+        let s = "a\u{0301}b\u{0301}c".to_string(); // 包含组合字符 "áb́c"
+        assert_eq!(get_str_by_display_range(&s, 0, 1), Some("a\u{0301}"));
+        assert_eq!(get_str_by_display_range(&s, 1, 2), Some("b\u{0301}"));
+    }
+
+    #[test]
+    fn test_display_range_with_emoji() {
+        let s = "😀😃😄😁".to_string();
+        assert_eq!(get_str_by_display_range(&s, 0, 4), Some("😀😃"));
+        assert_eq!(get_str_by_display_range(&s, 4, 8), Some("😄😁"));
+    }
+
+    #[test]
+    fn test_display_range_with_out_of_bounds() {
+        let s = "12345".to_string();
+        assert_eq!(get_str_by_display_range(&s, 10, 15), None);
+        assert_eq!(get_str_by_display_range(&s, 0, 10), Some("12345"));
+    }
 }
