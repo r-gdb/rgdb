@@ -165,9 +165,12 @@ impl Gdbtty {
     }
 
     fn handle_pane_key_event(key: &crossterm::event::KeyEvent) -> Option<Vec<u8>> {
+        debug!("gdb tty key event {:?}", &key);
         let input_bytes = match key.code {
             crossterm::event::KeyCode::Char(ch) => {
-                let mut send = vec![ch as u8];
+                let mut buf = [0_u8; 4];
+                let char = ch.encode_utf8(&mut buf);
+                let mut send = char.as_bytes().to_vec();
                 let upper = ch.to_ascii_uppercase();
                 if key.modifiers == crossterm::event::KeyModifiers::CONTROL {
                     match upper {
@@ -190,6 +193,7 @@ impl Gdbtty {
                         _ => {}
                     }
                 }
+                debug!("gdb tty key event send {:?}", &send);
                 send
             }
             #[cfg(unix)]
@@ -258,9 +262,13 @@ impl Component for Gdbtty {
     ) -> Result<Option<action::Action>> {
         if self.handle_key() && key.code != crossterm::event::KeyCode::Esc {
             if let Some(bytes) = Gdbtty::handle_pane_key_event(&key) {
-                let bytes = bytes.into_iter().map(char::from).collect::<String>();
+                // let bytes_utf8 = String::from_utf8_lossy(&bytes);
+                debug!("gdb tty send {:?}", &bytes);
+                // debug!("gdb tty send {:?}", &bytes_utf8);
                 if let Some(write) = self.gdb_writer.as_mut() {
-                    write!(write, "{}", bytes.as_str())?;
+                    // write.write(&bytes);
+                    write.write_all(&bytes)?;
+                    // write!(write, b"{}", bytes)?;
                 }
             }
         }

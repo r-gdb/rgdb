@@ -8,7 +8,6 @@ use crate::mi::frame::Frame as FrameMi;
 use crate::tool::{self, get_str_by_display_range};
 use crate::tool::{FileData, HashSelf, HighlightFileData, TextFileData};
 use crate::{action, config::Config};
-use arboard::Clipboard;
 use color_eyre::{eyre::Ok, Result};
 use crossterm::event::MouseButton;
 use ratatui::{prelude::*, widgets::*};
@@ -21,7 +20,6 @@ use strum::Display;
 use symbols::scrollbar;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
-use unicode_segmentation::UnicodeSegmentation;
 
 mod asmfuncdata;
 pub mod breakpoint;
@@ -120,18 +118,6 @@ impl Code {
     //         .sum()
     // }
 
-    /// 获取字符串在指定位置的字符(考虑UTF8字符宽度)
-    fn get_char_at_pos(text: &str, pos: usize) -> Option<(usize, char)> {
-        let mut width = 0;
-        for (i, c) in text.char_indices() {
-            let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
-            if width + char_width > pos {
-                return Some((i, c));
-            }
-            width += char_width;
-        }
-        None
-    }
     fn get_file_need_show(&self) -> Option<(&dyn FileData, u64)> {
         match self.get_file_need_show_return_file() {
             FileDataReal::None => None,

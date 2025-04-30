@@ -9,7 +9,6 @@ use std::hash::Hash;
 use std::rc::Rc;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::error;
-use tracing_subscriber::field::display;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 const NORD_THEME: &str = include_str!("../themes/Nord.tmTheme");

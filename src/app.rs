@@ -1,3 +1,4 @@
+use crate::components::copy_string::CopyString;
 use crate::components::gdbmi::Action as GdbmiAction;
 use crate::components::gdbtty::Action as GdbttyAction;
 use crate::{
@@ -66,6 +67,7 @@ impl App {
                 Box::new(Gdbtty::new()),
                 Box::new(StartPage::new()),
                 Box::new(StatusBar::new()),
+                Box::new(CopyString::new()),
             ],
             should_quit: false,
             should_suspend: false,

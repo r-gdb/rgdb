@@ -13,6 +13,7 @@ exclude = ["doc/*"]
 
 [dependencies]
 arboard = "3.5.0"
+base64 = "0.22.1"
 better-panic = "0.3.0"
 bytes = "1.9.0"
 clap = { version = "4.5.20", features = [
