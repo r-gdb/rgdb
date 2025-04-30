@@ -9,6 +9,7 @@ use std::hash::Hash;
 use std::rc::Rc;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::error;
+use tracing_subscriber::field::display;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 const NORD_THEME: &str = include_str!("../themes/Nord.tmTheme");
@@ -161,7 +162,14 @@ pub fn send_action(send: &UnboundedSender<action::Action>, action: action::Actio
     }
 }
 
-pub fn get_str_by_display_range(s: &String, start: usize, end: usize) -> Option<&str> {
+// 返回值是一个元组，包含三个元素：
+// 1. 截取的字符串
+
+pub fn get_str_by_display_range(
+    s: &String,
+    start: usize,
+    end: usize,
+) -> Option<(&str, usize, usize)> {
     let ret = UnicodeSegmentation::grapheme_indices(s.as_str(), true)
         .map(|(id, s)| (id, s.width(), s))
         .scan(0_usize, |len, (index, display_width, s)| {
@@ -169,18 +177,28 @@ pub fn get_str_by_display_range(s: &String, start: usize, end: usize) -> Option<
             *len += display_width;
             Some((index, display_start, display_width, s))
         })
-        .skip_while(|(id, display_start, display_width, s)| *display_start < start)
-        .take_while(|(id, display_start, display_width, s)| *display_start + *display_width <= end)
+        .skip_while(|(_, display_start, _, _)| *display_start < start)
+        .take_while(|(_, display_start, display_width, _)| *display_start + *display_width <= end)
         .fold(
             None,
             |range, (id, display_start, display_width, s)| match range {
-                None => Some((id, id + s.len())),
-                Some((start, end)) => Some((start, id + s.len())),
+                None => Some((
+                    id,
+                    id + s.len(),
+                    display_start,
+                    display_start + display_width,
+                )),
+                Some((start, _, display_start_org, _)) => Some((
+                    start,
+                    id + s.len(),
+                    display_start_org,
+                    display_start + display_width,
+                )),
             },
         )
-        .and_then(|(start, end)| {
+        .and_then(|(start, end, display_start, display_end)| {
             if start < end && end <= s.len() {
-                Some(&s[start..end])
+                Some((&s[start..end], display_start, display_end))
             } else {
                 None
             }
@@ -218,7 +236,7 @@ mod tests {
         let start = 0;
         let end = 10;
         let ret = get_str_by_display_range(&s, start, end);
-        assert_eq!(ret, Some("1234567890"));
+        assert_eq!(ret, Some(("1234567890", 0, 10)));
     }
     #[test]
     fn display_get_2() {
@@ -226,7 +244,7 @@ mod tests {
         let start = 0;
         let end = 5;
         let ret = get_str_by_display_range(&s, start, end);
-        assert_eq!(ret, Some("12345"));
+        assert_eq!(ret, Some(("12345", 0, 5)));
     }
     #[test]
     fn display_get_3() {
@@ -234,7 +252,7 @@ mod tests {
         let start = 1;
         let end = 9;
         let ret = get_str_by_display_range(&s, start, end);
-        assert_eq!(ret, Some("23456789"));
+        assert_eq!(ret, Some(("23456789", 1, 9)));
     }
     #[test]
     fn display_get_4() {
@@ -242,7 +260,7 @@ mod tests {
         let start = 1;
         let end = 11;
         let ret = get_str_by_display_range(&s, start, end);
-        assert_eq!(ret, Some("123中文😀5"));
+        assert_eq!(ret, Some(("123中文😀5", 1, 11)));
     }
     #[test]
     fn display_get_5() {
@@ -250,7 +268,7 @@ mod tests {
         let start = 5;
         let end = 11;
         let ret = get_str_by_display_range(&s, start, end);
-        assert_eq!(ret, Some("文😀5"));
+        assert_eq!(ret, Some(("文😀5", 6, 11)));
     }
     #[test]
     fn display_get_6() {
@@ -258,7 +276,7 @@ mod tests {
         let start = 5;
         let end = 9;
         let ret = get_str_by_display_range(&s, start, end);
-        assert_eq!(ret, Some("文"));
+        assert_eq!(ret, Some(("文", 6, 8)));
     }
     #[test]
     fn display_get_7() {
@@ -266,7 +284,7 @@ mod tests {
         let start = 5;
         let end = 15;
         let ret = get_str_by_display_range(&s, start, end);
-        assert_eq!(ret, Some("文😀1234\n"));
+        assert_eq!(ret, Some(("文😀1234\n", 6, 15)));
     }
     #[test]
     fn display_get_8() {
@@ -274,7 +292,7 @@ mod tests {
         let start = 5;
         let end = 2000;
         let ret = get_str_by_display_range(&s, start, end);
-        assert_eq!(ret, Some("文😀1234\n"));
+        assert_eq!(ret, Some(("文😀1234\n", 6, 15)));
     }
     #[test]
     fn display_get_9() {
@@ -287,21 +305,27 @@ mod tests {
     #[test]
     fn test_display_range_with_combining_characters() {
         let s = "a\u{0301}b\u{0301}c".to_string(); // 包含组合字符 "áb́c"
-        assert_eq!(get_str_by_display_range(&s, 0, 1), Some("a\u{0301}"));
-        assert_eq!(get_str_by_display_range(&s, 1, 2), Some("b\u{0301}"));
+        assert_eq!(
+            get_str_by_display_range(&s, 0, 1),
+            Some(("a\u{0301}", 0, 1))
+        );
+        assert_eq!(
+            get_str_by_display_range(&s, 1, 2),
+            Some(("b\u{0301}", 1, 2))
+        );
     }
 
     #[test]
     fn test_display_range_with_emoji() {
         let s = "😀😃😄😁".to_string();
-        assert_eq!(get_str_by_display_range(&s, 0, 4), Some("😀😃"));
-        assert_eq!(get_str_by_display_range(&s, 4, 8), Some("😄😁"));
+        assert_eq!(get_str_by_display_range(&s, 0, 4), Some(("😀😃", 0, 4)));
+        assert_eq!(get_str_by_display_range(&s, 4, 8), Some(("😄😁", 4, 8)));
     }
 
     #[test]
     fn test_display_range_with_out_of_bounds() {
         let s = "12345".to_string();
         assert_eq!(get_str_by_display_range(&s, 10, 15), None);
-        assert_eq!(get_str_by_display_range(&s, 0, 10), Some("12345"));
+        assert_eq!(get_str_by_display_range(&s, 0, 10), Some(("12345", 0, 5)));
     }
 }

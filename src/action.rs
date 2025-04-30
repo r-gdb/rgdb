@@ -23,4 +23,5 @@ pub enum Action {
     Gdbmi(gdbmi::Action),
     Code(code::Action),
     Mode(app::Mode),
+    CopyStr(String),
 }

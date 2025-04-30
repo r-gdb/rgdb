@@ -5,7 +5,7 @@ use crate::components::code::srcfiledata::SrcFileData;
 use crate::components::gdbmi;
 use crate::components::mouse_select::{MouseSelect, SelectionRange, TextSelection};
 use crate::mi::frame::Frame as FrameMi;
-use crate::tool;
+use crate::tool::{self, get_str_by_display_range};
 use crate::tool::{FileData, HashSelf, HighlightFileData, TextFileData};
 use crate::{action, config::Config};
 use arboard::Clipboard;
@@ -44,7 +44,7 @@ pub struct Code {
     is_horizontal: bool,
     // 文本选择状态
     select_range_now: Option<MouseSelect>,
-    select_range_last: Option<MouseSelect>,
+    select_ranges: Option<Vec<SelectionRange>>,
 }
 
 #[derive(Default)]
@@ -511,7 +511,7 @@ impl Code {
         frame.render_stateful_widget(scrollbar, area_src, &mut state);
     }
     fn draw_select(&self, frame: &mut Frame) {
-        if let Some(select) = self.get_selected_area() {
+        if let Some(select) = &self.select_ranges {
             select.iter().for_each(|s| {
                 let select_len = s.end_column.saturating_sub(s.start_column);
                 let text = Text::from_iter(Line::from_iter(std::iter::repeat_n(" ", select_len)));
@@ -592,10 +592,6 @@ impl Code {
         if let Some((_, lineinfo, AreasNoStatus { src: src_area, .. })) =
             self.get_file_show_areas_and_len(self.area)
         {
-            debug!(
-                "chenge_tui_poisition_to_file_position input row {} column {} rect {:?}",
-                row, column, src_area
-            );
             if src_area.contains(ratatui::layout::Position::new(column, row)) {
                 let row = (row as usize)
                     .saturating_sub(src_area.y as usize)
@@ -603,10 +599,6 @@ impl Code {
                 let col = (column as usize)
                     .saturating_sub(src_area.x as usize)
                     .saturating_add(self.horizontial_scroll);
-                debug!(
-                    "chenge_tui_poisition_to_file_position row {} col {}",
-                    row, col
-                );
                 Some((row, col))
             } else {
                 None
@@ -615,10 +607,78 @@ impl Code {
             None
         }
     }
+
+    /// 从文件位置获取选择范围信息
+    fn get_selection_ranges_and_text<'a>(
+        &self,
+        file: &'a dyn FileData,
+        file_start: (usize, usize),
+        file_end: (usize, usize),
+        area_width: u16,
+        start_row: u16,
+    ) -> Option<Vec<(&'a str, SelectionRange)>> {
+        let (lines_str, line_start_id, _) = file.get_lines_range(file_start.0, file_end.0 + 1);
+
+        // 验证起始行号是否匹配
+        if line_start_id != file_start.0 {
+            error!(
+                "file start line not same {} {}",
+                line_start_id, file_start.0
+            );
+            return None;
+        }
+
+        // 生成选择范围
+        let selected = lines_str
+            .iter()
+            .enumerate()
+            .map(|(id, s)| {
+                let id_file = id + line_start_id;
+                // 计算起始列
+                let start = if id_file == file_start.0 {
+                    file_start.1.max(0)
+                } else {
+                    0
+                };
+                // 计算结束列
+                let width = s.width();
+                let end = if id_file == file_end.0 {
+                    file_end.1.min(width)
+                } else {
+                    width
+                };
+
+                // 获取实际的字符范围
+                get_str_by_display_range(s, start, end).and_then(|(s, start, end)| {
+                    // 转换为屏幕坐标
+                    Some((
+                        s,
+                        SelectionRange {
+                            line_number: id.saturating_add(start_row.into()),
+                            start_column: start.saturating_add(area_width.into()),
+                            end_column: end.saturating_add(area_width.into()),
+                        },
+                    ))
+                })
+            })
+            .collect::<Option<Vec<_>>>();
+        selected
+    }
+
+    /// 获取区域宽度和起始位置信息
+    fn get_area_info(&self, rect: Rect) -> Option<(u16, AreasNoStatus)> {
+        self.get_file_show_areas_and_len(rect).map(|(_, _, areas)| {
+            let area = areas.ids.union(areas.split);
+            (area.width, areas)
+        })
+    }
 }
 
 impl TextSelection for Code {
-    fn handle_selection(&mut self, mouse: crossterm::event::MouseEvent) -> bool {
+    fn handle_selection(
+        &mut self,
+        mouse: crossterm::event::MouseEvent,
+    ) -> Option<(bool, MouseSelect)> {
         let pos = (mouse.row, mouse.column);
         let ret = match mouse.kind {
             crossterm::event::MouseEventKind::Down(MouseButton::Left) => {
@@ -626,8 +686,7 @@ impl TextSelection for Code {
                     start: pos,
                     end: pos,
                 });
-                self.select_range_last = self.select_range_now.clone();
-                true
+                self.select_range_now.clone().and_then(|s| Some((false, s)))
             }
             crossterm::event::MouseEventKind::Drag(MouseButton::Left) => {
                 match self.select_range_now {
@@ -638,8 +697,7 @@ impl TextSelection for Code {
                         error!("Mouse selection not initialized");
                     }
                 }
-                self.select_range_last = self.select_range_now.clone();
-                true
+                self.select_range_now.clone().and_then(|s| Some((false, s)))
             }
             crossterm::event::MouseEventKind::Up(MouseButton::Left) => {
                 match self.select_range_now {
@@ -650,63 +708,34 @@ impl TextSelection for Code {
                         error!("Mouse selection not initialized");
                     }
                 }
-                self.select_range_last = None;
+                let ret = self.select_range_now.clone().and_then(|s| Some((true, s)));
                 self.select_range_now = None;
-                true
-            }
-            _ => false,
-        };
-        match self.select_range_last {
-            Some(ref mut select) => {
-                if select.start > select.end {
-                    std::mem::swap(&mut select.start, &mut select.end);
-                }
-            }
-            None => {
-                error!("Mouse selection not initialized");
-            }
-        }
-        debug!("selesct is {:?}", &self.select_range_last);
-        debug!("selesct string {:?}", self.get_selected_text());
-        ret
-    }
-
-    fn get_selected_text(&self) -> Option<String> {
-        let selected = match (
-            self.select_range_last.clone(),
-            self.get_file_show_areas_and_len(self.area),
-        ) {
-            (
-                Some(MouseSelect {
-                    start: (start_row, start_col),
-                    end: (end_row, end_col),
-                }),
-                Some((file, lineinfo, area)),
-            ) => {
-                debug!(
-                    "start_row {} start_col {} end_row {} end_col {}",
-                    start_row, start_col, end_row, end_col
-                );
-                if let (Some(file_start), Some(file_end)) = (
-                    self.chenge_tui_poisition_to_file_position(start_row, start_col),
-                    self.chenge_tui_poisition_to_file_position(end_row, end_col),
-                ) {
-                    let selected = file
-                        .get_lines_range(file_start.0, file_end.0 + 1)
-                        .0
-                        .iter()
-                        .map(|s| s.to_string())
-                        .collect::<Vec<_>>()
-                        .join("");
-                    Some(selected)
-                } else {
-                    None
-                }
+                ret
             }
             _ => None,
         };
-        // debug!("selected string is {:?}", &selected);
-        selected
+        let ret = ret.and_then(|(flag, select)| Some((flag, select.legalization())));
+        ret
+    }
+
+    fn get_selected_text(&self, select: &MouseSelect) -> Option<String> {
+        // 1. 获取区域信息
+        let (area_width, _) = self.get_area_info(self.area)?;
+
+        // 2. 获取选择状态和文件信息
+        let MouseSelect {
+            start: (start_row, start_col),
+            end: (end_row, end_col),
+        } = select;
+        let (file, ..) = self.get_file_show_areas_and_len(self.area)?;
+
+        // 3. 转换为文件位置
+        let file_start = self.chenge_tui_poisition_to_file_position(*start_row, *start_col)?;
+        let file_end = self.chenge_tui_poisition_to_file_position(*end_row, *end_col)?;
+
+        // 4. 生成选择范围
+        self.get_selection_ranges_and_text(file, file_start, file_end, area_width, *start_row)
+            .and_then(|v| Some(v.into_iter().map(|(s, _)| s).collect::<Vec<_>>().join("")))
     }
 
     // /// 根据显示宽度获取字符位置
@@ -722,87 +751,24 @@ impl TextSelection for Code {
     //     None
     // }
 
-    fn get_selected_area(&self) -> Option<Vec<SelectionRange>> {
-        let selected = if let Some((
-            _,
-            _,
-            AreasNoStatus {
-                ids: ids_area,
-                split: split_area,
-                ..
-            },
-        )) = self.get_file_show_areas_and_len(self.area)
-        {
-            let area = ids_area.union(split_area);
-            let area_width = area.width;
-            match (
-                self.select_range_last.clone(),
-                self.get_file_show_areas_and_len(self.area),
-            ) {
-                (
-                    Some(MouseSelect {
-                        start: (start_row, start_col),
-                        end: (end_row, end_col),
-                    }),
-                    Some((file, lineinfo, area)),
-                ) => {
-                    debug!(
-                        "start_row {} start_col {} end_row {} end_col {}",
-                        start_row, start_col, end_row, end_col
-                    );
-                    if let (Some(file_start), Some(file_end)) = (
-                        self.chenge_tui_poisition_to_file_position(start_row, start_col),
-                        self.chenge_tui_poisition_to_file_position(end_row, end_col),
-                    ) {
-                        let (lines_str, line_start_id, line_end_id) =
-                            file.get_lines_range(file_start.0, file_end.0 + 1);
-                        if line_start_id != file_start.0 {
-                            error!(
-                                "file start line not same {} {}",
-                                line_start_id, file_start.0
-                            );
-                            None
-                        } else {
-                            let selected = lines_str
-                                .iter()
-                                .enumerate()
-                                .map(|(id, s)| {
-                                    let id_file = id + line_start_id;
-                                    let start = if id_file == file_start.0 {
-                                        file_start.1.max(0)
-                                    } else {
-                                        0
-                                    };
-                                    let width = s.width();
-                                    let end = if id_file == file_end.0 {
-                                        file_end.1.min(width)
-                                    } else {
-                                        width
-                                    };
-                                    (
-                                        start.saturating_add(area_width.into()),
-                                        end.saturating_add(area_width.into()),
-                                        id.saturating_add(start_row.into()),
-                                    )
-                                })
-                                .map(|(start, end, id)| SelectionRange {
-                                    line_number: id,
-                                    start_column: start,
-                                    end_column: end,
-                                })
-                                .collect::<Vec<_>>();
-                            Some(selected)
-                        }
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            }
-        } else {
-            None
-        };
-        selected
+    fn get_selected_area(&self, select: &MouseSelect) -> Option<Vec<SelectionRange>> {
+        // 1. 获取区域信息
+        let (area_width, _) = self.get_area_info(self.area)?;
+
+        // 2. 获取选择状态和文件信息
+        let MouseSelect {
+            start: (start_row, start_col),
+            end: (end_row, end_col),
+        } = select;
+        let (file, ..) = self.get_file_show_areas_and_len(self.area)?;
+
+        // 3. 转换为文件位置
+        let file_start = self.chenge_tui_poisition_to_file_position(*start_row, *start_col)?;
+        let file_end = self.chenge_tui_poisition_to_file_position(*end_row, *end_col)?;
+
+        // 4. 生成选择范围
+        self.get_selection_ranges_and_text(file, file_start, file_end, area_width, *start_row)
+            .and_then(|v| Some(v.into_iter().map(|(_, s)| s).collect::<Vec<_>>()))
     }
 }
 
@@ -826,13 +792,9 @@ impl Component for Code {
         &mut self,
         mouse: crossterm::event::MouseEvent,
     ) -> Result<Option<action::Action>> {
-        debug!("gen mouseEvent {:?}", &mouse);
         let is_in = self
             .area
             .contains(ratatui::layout::Position::new(mouse.column, mouse.row));
-
-        // 处理鼠标选择事件
-        let selection_changed = self.handle_selection(mouse.clone());
 
         // 处理滚动事件
         let action = match mouse.kind {
@@ -842,11 +804,27 @@ impl Component for Code {
             crossterm::event::MouseEventKind::ScrollDown if is_in => {
                 Some(action::Action::Code(Action::Down(3)))
             }
-            crossterm::event::MouseEventKind::Up(_) if selection_changed => {
-                if let Some(text) = self.get_selected_text() {
-                    let _ = Clipboard::new().and_then(|mut cb| cb.set_text(text));
+            crossterm::event::MouseEventKind::Up(MouseButton::Left)
+            | crossterm::event::MouseEventKind::Down(MouseButton::Left)
+            | crossterm::event::MouseEventKind::Drag(MouseButton::Left) => {
+                // 处理鼠标选择事件
+                match self.handle_selection(mouse.clone()) {
+                    Some((true, select)) => {
+                        self.select_ranges = None;
+                        let action = self
+                            .get_selected_text(&select)
+                            .and_then(|text| Some(action::Action::CopyStr(text)));
+                        if action.is_none() {
+                            error!("get selected text fail {:?}", &select);
+                        }
+                        action
+                    }
+                    Some((false, select)) => {
+                        self.select_ranges = self.get_selected_area(&select);
+                        None
+                    }
+                    _ => None,
                 }
-                None
             }
             _ => None,
         };
