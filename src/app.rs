@@ -5,7 +5,7 @@ use crate::{
     action,
     components::{
         code::Code, fps::FpsCounter, gdbmi::Gdbmi, gdbtty::Gdbtty, home::Home,
-        startpage::StartPage, statusbar::StatusBar, Component,
+        mouse_select::MouseSelectComponent, startpage::StartPage, statusbar::StatusBar, Component,
     },
     config::Config,
     tui::{Event, Tui},
@@ -68,6 +68,7 @@ impl App {
                 Box::new(StartPage::new()),
                 Box::new(StatusBar::new()),
                 Box::new(CopyString::new()),
+                Box::new(MouseSelectComponent::new()),
             ],
             should_quit: false,
             should_suspend: false,

@@ -1,12 +1,16 @@
 use std::time::{Duration, Instant};
 
-use super::{gdbtty, Component};
+use super::{
+    gdbtty,
+    mouse_select::{self, MouseSelect, SelectionRange, TextSelection},
+    Component,
+};
 use crate::{action, config::Config};
 use color_eyre::{eyre::Ok, Result};
 use ratatui::{prelude::*, widgets::*};
 use symbols::scrollbar;
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::debug;
+use tracing::{debug, error};
 // use tracing::debug;
 use crate::app::Mode;
 use crate::tool;
@@ -137,6 +141,13 @@ impl Home {
         frame.render_widget(scroll_block, area_in);
         frame.render_stateful_widget(scrollbar, area, &mut self.vertical_scroll_state);
     }
+    fn chenge_tui_poisition_to_tty_position(&self, row: u16, column: u16) -> Option<(u16, u16)> {
+        let (start_row, start_col) = (
+            row.saturating_sub(self.area.y),
+            column.saturating_sub(self.area.x),
+        );
+        Some((start_row, start_col))
+    }
 }
 
 impl Component for Home {
@@ -183,50 +194,87 @@ impl Component for Home {
         let is_in = self
             .area
             .contains(ratatui::layout::Position::new(mouse.column, mouse.row));
-        match mouse.kind {
+        let action = match mouse.kind {
             crossterm::event::MouseEventKind::ScrollUp => match is_in {
-                true => Ok(Some(action::Action::Home(Action::Up(3_usize)))),
-                false => Ok(None),
+                true => Some(action::Action::Home(Action::Up(3_usize))),
+                false => None,
             },
             crossterm::event::MouseEventKind::ScrollDown => match is_in {
-                true => Ok(Some(action::Action::Home(Action::Down(3_usize)))),
-                false => Ok(None),
+                true => Some(action::Action::Home(Action::Down(3_usize))),
+                false => None,
             },
-            _ => Ok(None),
-        }
+            _ => None,
+        };
+        Ok(action)
     }
     fn update(&mut self, action: action::Action) -> Result<Option<action::Action>> {
-        match action {
-            action::Action::Tick => {
-                // add any logic here that should run on every tick
-            }
-            action::Action::Render => {
-                // add any logic here that should run on every render
-            }
+        let ret_action = match action {
             action::Action::Resize(x, y) => {
                 self.set_area(&layout::Size::new(x, y));
                 // self.set_vt100_area(&layout::Size::new(x, y));
                 self.area_change_time = Some(Instant::now());
+                None
             }
             action::Action::Home(Action::Up(s)) => {
                 self.scroll_up(s);
+                None
             }
             action::Action::Home(Action::Down(s)) => {
                 self.scroll_down(s);
+                None
             }
-            action::Action::Mode(mode) => self.set_mode(mode),
+            action::Action::Mode(mode) => {
+                self.set_mode(mode);
+                None
+            }
             action::Action::Gdbtty(gdbtty::Action::Out(out)) => {
                 self.vt100_parser_buffer.append(out.clone().as_mut());
                 self.vt100_parser.process(out.as_slice());
                 self.vt100_parser.set_scrollback(0);
                 self.vertical_scroll = 0;
+                None
             }
             action::Action::SwapHV => {
                 self.is_horizontal = !self.is_horizontal;
+                None
             }
-            _ => {}
-        }
-        Ok(None)
+            action::Action::MouseSelect(mouse_select::Action::SelectionRange(select_action)) => {
+                match select_action {
+                    (true, select) => {
+                        if let Some(send) = self.command_tx.clone() {
+                            tool::send_action(
+                                &send,
+                                action::Action::MouseSelect(
+                                    mouse_select::Action::DelectSelectionRange(
+                                        mouse_select::SelectionRangeType::GdbtTTYWindeow,
+                                    ),
+                                ),
+                            );
+                        } else {
+                            error!("{}", "send mouse select error");
+                        }
+                        let action = self
+                            .get_selected_text(&select)
+                            .and_then(|text| Some(action::Action::CopyStr(text)));
+                        action
+                    }
+                    (false, select) => match self.get_selected_area(&select) {
+                        Some(select_area) => {
+                            let action = Some(action::Action::MouseSelect(
+                                mouse_select::Action::AddSelectionRange((
+                                    mouse_select::SelectionRangeType::GdbtTTYWindeow,
+                                    select_area,
+                                )),
+                            ));
+                            action
+                        }
+                        None => None,
+                    },
+                }
+            }
+            _ => None,
+        };
+        Ok(ret_action)
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect) -> Result<()> {
@@ -247,7 +295,76 @@ impl Component for Home {
         self.set_scroll_bar_status(n);
         self.draw_cmd(frame, area);
         self.draw_scroll(frame, area, n);
-
         Ok(())
+    }
+}
+
+impl TextSelection for Home {
+    fn get_selected_text(&self, select: &MouseSelect) -> Option<String> {
+        debug!("get selected area {:?}", &select);
+        let pos_start = Position::new(select.start.1, select.start.0);
+        let pos_end = Position::new(select.end.1, select.end.0);
+        if !(self.area.contains(pos_start) && self.area.contains(pos_end)) {
+            return None;
+        }
+        let screen = self.vt100_parser.screen();
+        let MouseSelect {
+            start: (select_start_row, select_start_col),
+            end: (select_end_row, select_end_col),
+        } = select;
+        let tty_select_start =
+            self.chenge_tui_poisition_to_tty_position(*select_start_row, *select_start_col)?;
+        let tty_select_end =
+            self.chenge_tui_poisition_to_tty_position(*select_end_row, *select_end_col)?;
+        let ans = screen.contents_between(
+            tty_select_start.0,
+            tty_select_start.1,
+            tty_select_end.0,
+            tty_select_end.1,
+        );
+        Some(ans)
+    }
+
+    fn get_selected_area(&self, select: &MouseSelect) -> Option<Vec<SelectionRange>> {
+        debug!("get selected area {:?}", &select);
+        let pos_start = Position::new(select.start.1, select.start.0);
+        let pos_end = Position::new(select.end.1, select.end.0);
+        if !(self.area.contains(pos_start) && self.area.contains(pos_end)) {
+            return None;
+        }
+        let (_start_row, start_col) = (self.area.y, self.area.x);
+        let screen = self.vt100_parser.screen();
+        let (_, width) = screen.size();
+        let MouseSelect {
+            start: (select_start_row, select_start_col),
+            end: (select_end_row, select_end_col),
+        } = select;
+        let tty_select_start =
+            self.chenge_tui_poisition_to_tty_position(*select_start_row, *select_start_col)?;
+        let tty_select_end =
+            self.chenge_tui_poisition_to_tty_position(*select_end_row, *select_end_col)?;
+        let select_row_len: usize =
+            (select_end_row.saturating_sub(*select_start_row) as usize).saturating_add(1);
+        let ret = (*select_start_row..*select_end_row + 1)
+            .enumerate()
+            .map(|(id, line_id)| {
+                let id = id + 1;
+                let start = match id == 1 {
+                    true => tty_select_start.1,
+                    false => 0,
+                } as usize;
+                let end = match id == select_row_len {
+                    true => tty_select_end.1,
+                    false => width,
+                } as usize;
+                SelectionRange {
+                    line_number: line_id as usize,
+                    start_column: start.saturating_add(start_col as usize),
+                    end_column: end.saturating_add(start_col as usize),
+                }
+            })
+            .collect::<Vec<SelectionRange>>();
+        debug!("get selected area {:?}", &ret);
+        Some(ret)
     }
 }

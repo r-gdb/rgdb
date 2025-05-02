@@ -1,4 +1,4 @@
-use super::Component;
+use super::{mouse_select, Component};
 use crate::components::code::asmfuncdata::AsmFuncData;
 use crate::components::code::breakpoint::BreakPointData;
 use crate::components::code::srcfiledata::SrcFileData;
@@ -9,18 +9,16 @@ use crate::tool::{self, get_str_by_display_range};
 use crate::tool::{FileData, HashSelf, HighlightFileData, TextFileData};
 use crate::{action, config::Config};
 use color_eyre::{eyre::Ok, Result};
-use crossterm::event::MouseButton;
 use ratatui::{prelude::*, widgets::*};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthStr;
 extern crate unicode_segmentation;
 use std::rc::Rc;
 use strum::Display;
 use symbols::scrollbar;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info};
-
 mod asmfuncdata;
 pub mod breakpoint;
 mod srcfiledata;
@@ -40,9 +38,6 @@ pub struct Code {
     horizontial_scroll: usize,
     area: Rect,
     is_horizontal: bool,
-    // 文本选择状态
-    select_range_now: Option<MouseSelect>,
-    select_ranges: Option<Vec<SelectionRange>>,
 }
 
 #[derive(Default)]
@@ -311,7 +306,6 @@ impl Code {
         return draw_info;
     }
     fn draw_all(&self, frame: &mut Frame, file: &dyn FileData, line_info: LineInfo, areas: Areas) {
-        self.draw_select(frame);
         let line_id_start_0 = if line_info.start_line <= line_info.line_id {
             Some(line_info.line_id.saturating_sub(line_info.start_line))
         } else {
@@ -496,23 +490,6 @@ impl Code {
             .position(self.vertical_scroll.saturating_sub(up_half));
         frame.render_stateful_widget(scrollbar, area_src, &mut state);
     }
-    fn draw_select(&self, frame: &mut Frame) {
-        if let Some(select) = &self.select_ranges {
-            select.iter().for_each(|s| {
-                let select_len = s.end_column.saturating_sub(s.start_column);
-                let text = Text::from_iter(Line::from_iter(std::iter::repeat_n(" ", select_len)));
-                let paragraph = Paragraph::new(text).bg(Color::Rgb(255, 204, 153));
-                let area = Rect::new(
-                    s.start_column as u16,
-                    s.line_number as u16,
-                    select_len as u16,
-                    1,
-                );
-                frame.render_widget(paragraph, area);
-                debug!("draw select area {:?}", &area);
-            });
-        }
-    }
     fn set_vertical_to_stop_point(&mut self, file_name: &String) {
         match self.get_file_need_show() {
             Some((file, line_id)) => {
@@ -661,49 +638,6 @@ impl Code {
 }
 
 impl TextSelection for Code {
-    fn handle_selection(
-        &mut self,
-        mouse: crossterm::event::MouseEvent,
-    ) -> Option<(bool, MouseSelect)> {
-        let pos = (mouse.row, mouse.column);
-        let ret = match mouse.kind {
-            crossterm::event::MouseEventKind::Down(MouseButton::Left) => {
-                self.select_range_now = Some(MouseSelect {
-                    start: pos,
-                    end: pos,
-                });
-                self.select_range_now.clone().and_then(|s| Some((false, s)))
-            }
-            crossterm::event::MouseEventKind::Drag(MouseButton::Left) => {
-                match self.select_range_now {
-                    Some(ref mut select) => {
-                        select.end = pos;
-                    }
-                    None => {
-                        error!("Mouse selection not initialized");
-                    }
-                }
-                self.select_range_now.clone().and_then(|s| Some((false, s)))
-            }
-            crossterm::event::MouseEventKind::Up(MouseButton::Left) => {
-                match self.select_range_now {
-                    Some(ref mut select) => {
-                        select.end = pos;
-                    }
-                    None => {
-                        error!("Mouse selection not initialized");
-                    }
-                }
-                let ret = self.select_range_now.clone().and_then(|s| Some((true, s)));
-                self.select_range_now = None;
-                ret
-            }
-            _ => None,
-        };
-        let ret = ret.and_then(|(flag, select)| Some((flag, select.legalization())));
-        ret
-    }
-
     fn get_selected_text(&self, select: &MouseSelect) -> Option<String> {
         // 1. 获取区域信息
         let (area_width, _) = self.get_area_info(self.area)?;
@@ -723,19 +657,6 @@ impl TextSelection for Code {
         self.get_selection_ranges_and_text(file, file_start, file_end, area_width, *start_row)
             .and_then(|v| Some(v.into_iter().map(|(s, _)| s).collect::<Vec<_>>().join("")))
     }
-
-    // /// 根据显示宽度获取字符位置
-    // fn get_char_pos(text: &str, display_pos: usize) -> Option<usize> {
-    //     let mut width = 0;
-    //     for (i, c) in text.char_indices() {
-    //         let char_width = UnicodeWidthChar::width(c).unwrap_or(0);
-    //         if width + char_width > display_pos {
-    //             return Some(i);
-    //         }
-    //         width += char_width;
-    //     }
-    //     None
-    // }
 
     fn get_selected_area(&self, select: &MouseSelect) -> Option<Vec<SelectionRange>> {
         // 1. 获取区域信息
@@ -789,28 +710,6 @@ impl Component for Code {
             }
             crossterm::event::MouseEventKind::ScrollDown if is_in => {
                 Some(action::Action::Code(Action::Down(3)))
-            }
-            crossterm::event::MouseEventKind::Up(MouseButton::Left)
-            | crossterm::event::MouseEventKind::Down(MouseButton::Left)
-            | crossterm::event::MouseEventKind::Drag(MouseButton::Left) => {
-                // 处理鼠标选择事件
-                match self.handle_selection(mouse.clone()) {
-                    Some((true, select)) => {
-                        self.select_ranges = None;
-                        let action = self
-                            .get_selected_text(&select)
-                            .and_then(|text| Some(action::Action::CopyStr(text)));
-                        if action.is_none() {
-                            error!("get selected text fail {:?}", &select);
-                        }
-                        action
-                    }
-                    Some((false, select)) => {
-                        self.select_ranges = self.get_selected_area(&select);
-                        None
-                    }
-                    _ => None,
-                }
             }
             _ => None,
         };
@@ -954,6 +853,40 @@ impl Component for Code {
                     }
                 }
                 self.set_vertical_to_stop_point(&func);
+            }
+            action::Action::MouseSelect(mouse_select::Action::SelectionRange(select_action)) => {
+                match select_action {
+                    (true, select) => {
+                        let action = self
+                            .get_selected_text(&select)
+                            .and_then(|text| Some(action::Action::CopyStr(text)));
+                        if let Some(send) = self.command_tx.clone() {
+                            tool::send_action(
+                                &send,
+                                action::Action::MouseSelect(
+                                    mouse_select::Action::DelectSelectionRange(
+                                        mouse_select::SelectionRangeType::SrcWindow,
+                                    ),
+                                ),
+                            );
+                        } else {
+                            error!("{}", "send mouse select error");
+                        }
+                        ret = action;
+                    }
+                    (false, select) => match self.get_selected_area(&select) {
+                        Some(select_area) => {
+                            let action = Some(action::Action::MouseSelect(
+                                mouse_select::Action::AddSelectionRange((
+                                    mouse_select::SelectionRangeType::SrcWindow,
+                                    select_area,
+                                )),
+                            ));
+                            ret = action
+                        }
+                        None => {}
+                    },
+                }
             }
             _ => {}
         }

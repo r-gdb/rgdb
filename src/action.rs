@@ -6,6 +6,7 @@ use crate::components::code;
 use crate::components::gdbmi;
 use crate::components::gdbtty;
 use crate::components::home;
+use crate::components::mouse_select;
 #[derive(Debug, Clone, PartialEq, Eq, Display, Serialize, Deserialize)]
 pub enum Action {
     Tick,
@@ -24,4 +25,5 @@ pub enum Action {
     Code(code::Action),
     Mode(app::Mode),
     CopyStr(String),
+    MouseSelect(mouse_select::Action),
 }
