@@ -10,7 +10,7 @@ authors = [
 build = "build.rs"
 license = "MIT"
 repository = "https://github.com/r-gdb/rgdb"
-exclude = ["doc/*", "test/*"]
+exclude = ["doc/*", "test/*", ".github/*"]
 categories = ["command-line-utilities", "development-tools::debugging"]
 keywords = ["gdb-frontend", "debugger", "cli"]
 
