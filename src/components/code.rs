@@ -577,7 +577,7 @@ impl Code {
         file: &'a dyn FileData,
         file_start: (usize, usize),
         file_end: (usize, usize),
-        area_width: u16,
+        area: Rect,
         start_row: u16,
     ) -> Option<Vec<(&'a str, SelectionRange)>> {
         let (lines_str, line_start_id, _) = file.get_lines_range(file_start.0, file_end.0 + 1);
@@ -618,8 +618,13 @@ impl Code {
                         s,
                         SelectionRange {
                             line_number: id.saturating_add(start_row.into()),
-                            start_column: start.saturating_add(area_width.into()),
-                            end_column: end.saturating_add(area_width.into()),
+                            start_column: start
+                                .saturating_sub(self.horizontial_scroll)
+                                .saturating_add(area.x.into()),
+                            end_column: end
+                                .saturating_sub(self.horizontial_scroll)
+                                .min(area.width.saturating_sub(1) as usize)
+                                .saturating_add(area.x.into()),
                         },
                     ))
                 })
@@ -640,7 +645,7 @@ impl Code {
 impl TextSelection for Code {
     fn get_selected_text(&self, select: &MouseSelect) -> Option<String> {
         // 1. 获取区域信息
-        let (area_width, _) = self.get_area_info(self.area)?;
+        let (_, area) = self.get_area_info(self.area)?;
 
         // 2. 获取选择状态和文件信息
         let MouseSelect {
@@ -654,13 +659,13 @@ impl TextSelection for Code {
         let file_end = self.chenge_tui_poisition_to_file_position(*end_row, *end_col)?;
 
         // 4. 生成选择范围
-        self.get_selection_ranges_and_text(file, file_start, file_end, area_width, *start_row)
+        self.get_selection_ranges_and_text(file, file_start, file_end, area.src, *start_row)
             .and_then(|v| Some(v.into_iter().map(|(s, _)| s).collect::<Vec<_>>().join("")))
     }
 
     fn get_selected_area(&self, select: &MouseSelect) -> Option<Vec<SelectionRange>> {
         // 1. 获取区域信息
-        let (area_width, _) = self.get_area_info(self.area)?;
+        let (_, area) = self.get_area_info(self.area)?;
 
         // 2. 获取选择状态和文件信息
         let MouseSelect {
@@ -674,7 +679,7 @@ impl TextSelection for Code {
         let file_end = self.chenge_tui_poisition_to_file_position(*end_row, *end_col)?;
 
         // 4. 生成选择范围
-        self.get_selection_ranges_and_text(file, file_start, file_end, area_width, *start_row)
+        self.get_selection_ranges_and_text(file, file_start, file_end, area.src, *start_row)
             .and_then(|v| Some(v.into_iter().map(|(_, s)| s).collect::<Vec<_>>()))
     }
 }
