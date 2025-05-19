@@ -169,8 +169,7 @@ impl Code {
     }
     fn set_area(&mut self, area: &layout::Size) {
         let area = Rect::new(0, 0, area.width, area.height);
-        let layouts: tool::Layouts = (area, self.is_horizontal).into();
-        self.area = layouts.src;
+        tool::Layouts { src: self.area, .. } = (area, self.is_horizontal).into();
     }
     fn file_down(&mut self, n: usize) {
         self.vertical_scroll = self.vertical_scroll.saturating_add(n);

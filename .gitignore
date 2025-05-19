@@ -3,3 +3,7 @@
 .VSCodeCounter/
 build/*
 .continue
+test/*.o
+test/*.exe
+test/*.out
+test/generated_big_cpp.cpp

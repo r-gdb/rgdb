@@ -7,7 +7,7 @@ use crate::tool::{FileData, HighlightFileData, TextFileData};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::Path;
-use std::rc::Rc;
+use std::sync::Arc;
 use syntect::easy::HighlightLines;
 use tokio::fs::File;
 use tokio::io::AsyncBufReadExt;
@@ -16,7 +16,7 @@ use tracing::error;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct SrcFileData {
-    pub file_name: Rc<String>,
+    pub file_name: Arc<String>,
     lines: Vec<String>,
     lines_highlight: Vec<Vec<(ratatui::style::Color, String)>>,
     read_done: bool,
@@ -120,7 +120,7 @@ impl HighlightFileData for SrcFileData {
 impl SrcFileData {
     pub fn new(file_name: String) -> Self {
         Self {
-            file_name: Rc::new(file_name),
+            file_name: Arc::new(file_name),
             lines: vec![],
             lines_highlight: vec![],
             read_done: false,
@@ -145,33 +145,43 @@ impl SrcFileData {
             let ps = tool::get_syntax_set(ext);
             if let Some(syntax) = ps.find_syntax_by_extension(ext) {
                 let mut h = HighlightLines::new(syntax, &theme);
-                lines.iter().for_each(|s| match h.highlight_line(s, &ps) {
-                    std::result::Result::Ok(ranges) => {
-                        let e = ranges
-                            .into_iter()
-                            .map(|(c, s)| {
-                                (
-                                    ratatui::style::Color::Rgb(
-                                        c.foreground.r,
-                                        c.foreground.g,
-                                        c.foreground.b,
-                                    ),
-                                    s.to_string(),
-                                )
-                            })
-                            .collect();
-                        tool::send_action(
-                            &send,
-                            action::Action::Code(code::Action::FilehighlightLine((
-                                file_name.clone(),
-                                e,
-                            ))),
-                        );
+                
+                // 每处理几行就主动交出控制权
+                const YIELD_INTERVAL: usize = 100;
+                for (i, s) in lines.iter().enumerate() {
+                    // 每处理YIELD_INTERVAL行就交出控制权
+                    if i % YIELD_INTERVAL == 0 && i > 0 {
+                        // tokio::task::yield_now().await;
                     }
-                    std::result::Result::Err(e) => {
-                        error!("file {} highlight fail {} {}", &file_name, &s, e);
+                    
+                    match h.highlight_line(s, &ps) {
+                        std::result::Result::Ok(ranges) => {
+                            let e = ranges
+                                .into_iter()
+                                .map(|(c, s)| {
+                                    (
+                                        ratatui::style::Color::Rgb(
+                                            c.foreground.r,
+                                            c.foreground.g,
+                                            c.foreground.b,
+                                        ),
+                                        s.to_string(),
+                                    )
+                                })
+                                .collect();
+                            tool::send_action(
+                                &send,
+                                action::Action::Code(code::Action::FilehighlightLine((
+                                    file_name.clone(),
+                                    e,
+                                ))),
+                            );
+                        }
+                        std::result::Result::Err(e) => {
+                            error!("file {} highlight fail {} {}", &file_name, &s, e);
+                        }
                     }
-                });
+                }
                 tool::send_action(
                     &send,
                     action::Action::Code(code::Action::FilehighlightEnd(file_name)),
@@ -222,6 +232,9 @@ impl SrcFileData {
         match File::open(&file).await {
             std::result::Result::Ok(f) => {
                 let mut f = tokio::io::BufReader::new(f);
+                let mut line_count = 0;
+                const YIELD_INTERVAL: usize = 200; // 每读取200行让出一次控制权
+                
                 loop {
                     let mut line = String::new();
                     match f.read_line(&mut line).await {
@@ -241,6 +254,12 @@ impl SrcFileData {
                                     line,
                                 ))),
                             );
+                            
+                            // 每读取YIELD_INTERVAL行就让出控制权
+                            line_count += 1;
+                            if line_count % YIELD_INTERVAL == 0 {
+                                tokio::task::yield_now().await;
+                            }
                         }
                         Err(e) => {
                             error!("file {} parse error: {:?}", &file, e);
@@ -260,7 +279,7 @@ impl SrcFileData {
 }
 
 impl crate::tool::HashSelf<String> for SrcFileData {
-    fn get_key(&self) -> Rc<String> {
+    fn get_key(&self) -> Arc<String> {
         self.file_name.clone()
     }
 }
