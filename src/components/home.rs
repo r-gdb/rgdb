@@ -141,7 +141,7 @@ impl Home {
         frame.render_widget(scroll_block, area_in);
         frame.render_stateful_widget(scrollbar, area, &mut self.vertical_scroll_state);
     }
-    fn chenge_tui_poisition_to_tty_position(&self, row: u16, column: u16) -> Option<(u16, u16)> {
+    fn change_tui_position_to_tty_position(&self, row: u16, column: u16) -> Option<(u16, u16)> {
         let (start_row, start_col) = (
             row.saturating_sub(self.area.y),
             column.saturating_sub(self.area.x),
@@ -313,16 +313,19 @@ impl TextSelection for Home {
             end: (select_end_row, select_end_col),
         } = select;
         let tty_select_start =
-            self.chenge_tui_poisition_to_tty_position(*select_start_row, *select_start_col)?;
+            self.change_tui_position_to_tty_position(*select_start_row, *select_start_col)?;
         let tty_select_end =
-            self.chenge_tui_poisition_to_tty_position(*select_end_row, *select_end_col)?;
+            self.change_tui_position_to_tty_position(*select_end_row, *select_end_col)?;
         let ans = screen.contents_between(
             tty_select_start.0,
             tty_select_start.1,
             tty_select_end.0,
             tty_select_end.1,
         );
-        Some(ans)
+        match ans.is_empty() {
+            true => None,
+            false => Some(ans),
+        }
     }
 
     fn get_selected_area(&self, select: &MouseSelect) -> Option<Vec<SelectionRange>> {
@@ -340,9 +343,9 @@ impl TextSelection for Home {
             end: (select_end_row, select_end_col),
         } = select;
         let tty_select_start =
-            self.chenge_tui_poisition_to_tty_position(*select_start_row, *select_start_col)?;
+            self.change_tui_position_to_tty_position(*select_start_row, *select_start_col)?;
         let tty_select_end =
-            self.chenge_tui_poisition_to_tty_position(*select_end_row, *select_end_col)?;
+            self.change_tui_position_to_tty_position(*select_end_row, *select_end_col)?;
         let select_row_len: usize =
             (select_end_row.saturating_sub(*select_start_row) as usize).saturating_add(1);
         let ret = (*select_start_row..*select_end_row + 1)
