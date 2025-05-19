@@ -169,7 +169,8 @@ impl Code {
     }
     fn set_area(&mut self, area: &layout::Size) {
         let area = Rect::new(0, 0, area.width, area.height);
-        tool::Layouts { src: self.area, .. } = (area, self.is_horizontal).into();
+        let layouts: tool::Layouts = (area, self.is_horizontal).into();
+        self.area = layouts.src;
     }
     fn file_down(&mut self, n: usize) {
         self.vertical_scroll = self.vertical_scroll.saturating_add(n);
@@ -547,7 +548,7 @@ impl Code {
         }
         ret
     }
-    fn chenge_tui_poisition_to_file_position(
+    fn change_tui_position_to_file_position(
         &self,
         row: u16,
         column: u16,
@@ -655,12 +656,13 @@ impl TextSelection for Code {
         let (file, ..) = self.get_file_show_areas_and_len(self.area)?;
 
         // 3. 转换为文件位置
-        let file_start = self.chenge_tui_poisition_to_file_position(*start_row, *start_col)?;
-        let file_end = self.chenge_tui_poisition_to_file_position(*end_row, *end_col)?;
+        let file_start = self.change_tui_position_to_file_position(*start_row, *start_col)?;
+        let file_end = self.change_tui_position_to_file_position(*end_row, *end_col)?;
 
         // 4. 生成选择范围
         self.get_selection_ranges_and_text(file, file_start, file_end, area.src, *start_row)
             .and_then(|v| Some(v.into_iter().map(|(s, _)| s).collect::<Vec<_>>().join("")))
+            .and_then(|s| if s.is_empty() { None } else { Some(s) })
     }
 
     fn get_selected_area(&self, select: &MouseSelect) -> Option<Vec<SelectionRange>> {
@@ -675,8 +677,8 @@ impl TextSelection for Code {
         let (file, ..) = self.get_file_show_areas_and_len(self.area)?;
 
         // 3. 转换为文件位置
-        let file_start = self.chenge_tui_poisition_to_file_position(*start_row, *start_col)?;
-        let file_end = self.chenge_tui_poisition_to_file_position(*end_row, *end_col)?;
+        let file_start = self.change_tui_position_to_file_position(*start_row, *start_col)?;
+        let file_end = self.change_tui_position_to_file_position(*end_row, *end_col)?;
 
         // 4. 生成选择范围
         self.get_selection_ranges_and_text(file, file_start, file_end, area.src, *start_row)

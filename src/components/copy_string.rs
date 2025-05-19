@@ -23,7 +23,7 @@ impl CopyString {
         match &mut self.board {
             Some(clipboard) => match clipboard.set_text(s.clone()) {
                 Ok(_) => {
-                    debug!("Clipboard set to: {}", s);
+                    debug!("Clipboard set to: {:?}", s);
                 }
                 Err(e) => {
                     return Err(eyre::eyre!("Failed to set clipboard: {}", e));
@@ -40,12 +40,13 @@ impl CopyString {
         if std::env::var("SSH_TTY").is_err() && std::env::var("SSH_CLIENT").is_err() {
             return Err(eyre::eyre!("Not in SSH session"));
         }
-
         // Base64编码内容
         let encoded = STANDARD.encode(s);
+        debug!("Base64 encoded string: {:?} {:?}", &encoded, &s);
 
         // 构建OSC 52序列
         let osc52 = format!("\x1B]52;c;{}\x07", encoded);
+        debug!("OSC 52 sequence: {:?}", &osc52);
 
         // 写入到标准输出
         if let Err(e) = std::io::stdout().write_all(osc52.as_bytes()) {
