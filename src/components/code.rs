@@ -783,7 +783,7 @@ impl Component for Code {
                             self.files_set.insert(name, file_data);
                             let highlight_thread =
                                 SrcFileData::highlight_file(file.clone(), lines, send.clone());
-                            tokio::spawn(async {
+                            tokio::task::spawn_local(async {
                                 highlight_thread.await;
                             });
                             debug!("highlight file {} start", file);

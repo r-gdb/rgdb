@@ -7,7 +7,7 @@ use crate::tool::{FileData, HighlightFileData, TextFileData};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::Path;
-use std::sync::Arc;
+use std::rc::Rc;
 use syntect::easy::HighlightLines;
 use tokio::fs::File;
 use tokio::io::AsyncBufReadExt;
@@ -16,7 +16,7 @@ use tracing::error;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct SrcFileData {
-    pub file_name: Arc<String>,
+    pub file_name: Rc<String>,
     lines: Vec<String>,
     lines_highlight: Vec<Vec<(ratatui::style::Color, String)>>,
     read_done: bool,
@@ -120,7 +120,7 @@ impl HighlightFileData for SrcFileData {
 impl SrcFileData {
     pub fn new(file_name: String) -> Self {
         Self {
-            file_name: Arc::new(file_name),
+            file_name: Rc::new(file_name),
             lines: vec![],
             lines_highlight: vec![],
             read_done: false,
@@ -147,11 +147,11 @@ impl SrcFileData {
                 let mut h = HighlightLines::new(syntax, &theme);
                 
                 // 每处理几行就主动交出控制权
-                const YIELD_INTERVAL: usize = 100;
+                const YIELD_INTERVAL: usize = 200;
                 for (i, s) in lines.iter().enumerate() {
                     // 每处理YIELD_INTERVAL行就交出控制权
                     if i % YIELD_INTERVAL == 0 && i > 0 {
-                        // tokio::task::yield_now().await;
+                        tokio::task::yield_now().await;
                     }
                     
                     match h.highlight_line(s, &ps) {
@@ -279,7 +279,7 @@ impl SrcFileData {
 }
 
 impl crate::tool::HashSelf<String> for SrcFileData {
-    fn get_key(&self) -> Arc<String> {
+    fn get_key(&self) -> Rc<String> {
         self.file_name.clone()
     }
 }

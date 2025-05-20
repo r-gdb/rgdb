@@ -2,6 +2,7 @@ use crate::app::App;
 use clap::Parser;
 use cli::Cli;
 use color_eyre::Result;
+use tokio::task;
 use tracing::debug;
 
 mod action;
@@ -32,6 +33,19 @@ async fn main() -> Result<()> {
         args.args,
         args.gdb_args,
     )?;
-    app.run().await?;
+    let local = task::LocalSet::new();
+    local
+        .run_until(async move {
+            let ans = app.run().await;
+            match ans {
+                Ok(_) => {
+                    debug!("rgdb exited normally");
+                }
+                Err(e) => {
+                    debug!("rgdb exited with error: {:?}", e);
+                }
+            }
+        })
+        .await;
     Ok(())
 }
